@@ -3,6 +3,7 @@ module routerDemo
 go 1.19
 
 require (
+	github.com/dgrijalva/jwt-go v3.2.0+incompatible // indirect
 	github.com/felixge/httpsnoop v1.0.1 // indirect
 	github.com/gofrs/uuid v4.3.0+incompatible // indirect
 	github.com/golang/snappy v0.0.1 // indirect

@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"github.com/dgrijalva/jwt-go"
 	"github.com/gofrs/uuid"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
@@ -17,6 +19,43 @@ import (
 	"os"
 	"time"
 )
+
+/*
+===================================CONFIGURATION FUNCTIONALITY=============================================
+*/
+
+// Configuration is a struct designed to hold the applications variable configuration settings
+type Configuration struct {
+	MongoURI     string
+	Database     string
+	TokenSecret  string
+	RootAdmin    string
+	RootPassword string
+	RootEmail    string
+}
+
+// ConfigurationSettings is a function that reads a json configuration file and outputs a Configuration struct
+func ConfigurationSettings() *Configuration {
+	confFile := "confs.json"
+	file, _ := os.Open(confFile)
+	decoder := json.NewDecoder(file)
+	configurationSettings := Configuration{}
+	err := decoder.Decode(&configurationSettings)
+	if err != nil {
+		panic(err)
+	}
+	return &configurationSettings
+}
+
+// InitializeEnvironmentals initializes the environmental variables for the application
+func (c *Configuration) InitializeEnvironmentals() {
+	os.Setenv("MONGO_URI", c.MongoURI)
+	os.Setenv("DATABASE", c.Database)
+	os.Setenv("TOKEN_SECRET", c.TokenSecret)
+	os.Setenv("ROOT_ADMIN", c.RootAdmin)
+	os.Setenv("ROOT_PASSWORD", c.RootPassword)
+	os.Setenv("ROOT_EMAIL", c.RootEmail)
+}
 
 /*
 ===================================UTILITY FUNCTIONS=============================================
@@ -64,6 +103,103 @@ type jsonErr struct {
 }
 
 /*
+===================================TOKEN FUNCTIONALITY=============================================
+*/
+
+// TokenData stores the structured data from a session token for use
+type TokenData struct {
+	UserId  string
+	Role    string
+	GroupId string
+}
+
+// CreateToken is used to create a new session JWT token
+func CreateToken(user *User, exp int64) (string, error) {
+	var MySigningKey = []byte(os.Getenv("TOKEN_SECRET"))
+	token := jwt.New(jwt.SigningMethodHS256)
+	claims := token.Claims.(jwt.MapClaims)
+	claims["role"] = user.Role
+	claims["username"] = user.Username
+	claims["uuid"] = user.Uuid
+	claims["group_id"] = user.GroupId
+	claims["exp"] = exp
+	return token.SignedString(MySigningKey)
+}
+
+// DecodeJWT is used to decode a JWT token
+func DecodeJWT(curToken string) (*TokenData, error) {
+	var tokenData TokenData
+	var MySigningKey = []byte(os.Getenv("TOKEN_SECRET"))
+	// Decode token
+	token, err := jwt.Parse(curToken, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("error")
+		}
+		return []byte(MySigningKey), nil
+	})
+	if err != nil {
+		return &tokenData, err
+	}
+	// Determine user based on token
+	tokenClaims := token.Claims.(jwt.MapClaims)
+	tokenData.UserId = tokenClaims["uuid"].(string)
+	tokenData.UserId = tokenClaims["role"].(string)
+	tokenData.GroupId = tokenClaims["group_id"].(string)
+	return &tokenData, nil
+}
+
+/*
+==============================AUTHENTICATION MIDDLEWARE FUNCTIONALITY===========================================
+*/
+
+/*
+// TODO ADD AUTH MIDDLEWARE FUNCTIONS HERE:
+https://github.com/JECSand/restful_api_boilerplate/blob/master/src/rest_api/pkg/server/middleware.go
+*/
+
+/*
+===================================TOKEN BLACKLIST MODEL=============================================
+*/
+
+/*
+// TODO ADD TOKEN BLACK LIST MODEL HERE:
+https://github.com/JECSand/restful_api_boilerplate/blob/master/src/rest_api/pkg/blacklist.go
+*/
+
+/*
+===================================ROOT USER MODEL=============================================
+*/
+
+// User is a root struct that is used to store the json encoded data for/from a mongodb user doc.
+type User struct {
+	Id               string `json:"id,omitempty"`
+	Uuid             string `json:"uuid,omitempty"`
+	Username         string `json:"username,omitempty"`
+	Password         string `json:"password,omitempty"`
+	FirstName        string `json:"firstname,omitempty"`
+	LastName         string `json:"lastname,omitempty"`
+	Email            string `json:"email,omitempty"`
+	Role             string `json:"role,omitempty"`
+	GroupId          string `json:"group_id,omitempty"`
+	LastModified     string `json:"last_modified,omitempty"`
+	CreationDatetime string `json:"creation_datetime,omitempty"`
+}
+
+// UserService is an interface used to manage the relevant user doc controllers
+type UserService interface {
+	AuthenticateUser(u *User) *User
+	BlacklistAuthToken(authToken string)
+	RefreshToken(tokenData *TokenData) *User
+	UpdatePassword(tokenData *TokenData, CurrentPassword string, newPassword string) *User
+	UserCreate(u *User) *User
+	UserDelete(*User) *User
+	UsersFind(*User) []*User
+	UserFind(*User) *User
+	UserUpdate(u *User) *User
+	UserDocInsert(u *User) *User
+}
+
+/*
 ===================================ROOT GROUP MODEL=============================================
 */
 
@@ -89,6 +225,7 @@ func (g *Group) addTimeStamps(newRecord bool) {
 // GroupService is an interface used to manage the relevant group doc controllers
 type GroupService interface {
 	GroupCreate(g *Group) (*Group, error)
+	GroupFind(g *Group) (*Group, error)
 	GroupsFind() ([]*Group, error)
 }
 
@@ -125,6 +262,69 @@ func (db *DBClient) Close() error {
 	err := db.client.Disconnect(ctx)
 	return err
 }
+
+/*
+===================================TOKEN DB MODEL=============================================
+*/
+
+/*
+// TODO ADD TOKEN BLACK LIST DB MODEL HERE:
+https://github.com/JECSand/restful_api_boilerplate/blob/master/src/rest_api/pkg/mongodb/blacklist_model.go
+*/
+
+/*
+===================================USER DB MODEL AND SERVICE=============================================
+*/
+
+type userModel struct {
+	Id               primitive.ObjectID `bson:"_id,omitempty"`
+	Uuid             string             `bson:"uuid,omitempty"`
+	Username         string             `bson:"username,omitempty"`
+	Password         string             `bson:"password,omitempty"`
+	FirstName        string             `bson:"firstname,omitempty"`
+	LastName         string             `bson:"lastname,omitempty"`
+	Email            string             `bson:"email,omitempty"`
+	Role             string             `bson:"role,omitempty"`
+	GroupId          string             `bson:"group_id,omitempty"`
+	LastModified     string             `bson:"last_modified,omitempty"`
+	CreationDatetime string             `bson:"creation_datetime,omitempty"`
+}
+
+func newUserModel(u *User) *userModel {
+	return &userModel{
+		Uuid:             u.Uuid,
+		Username:         u.Username,
+		Password:         u.Password,
+		FirstName:        u.FirstName,
+		LastName:         u.LastName,
+		Email:            u.Email,
+		Role:             u.Role,
+		GroupId:          u.GroupId,
+		LastModified:     u.LastModified,
+		CreationDatetime: u.CreationDatetime,
+	}
+}
+
+func (u *userModel) toRootUser() *User {
+	return &User{
+		Id:               u.Id.Hex(),
+		Uuid:             u.Uuid,
+		Username:         u.Username,
+		Password:         u.Password,
+		FirstName:        u.FirstName,
+		LastName:         u.LastName,
+		Email:            u.Email,
+		Role:             u.Role,
+		GroupId:          u.GroupId,
+		LastModified:     u.LastModified,
+		CreationDatetime: u.CreationDatetime,
+	}
+}
+
+/*
+// TODO ADD USER DB SERVICE HERE:
+https://github.com/JECSand/restful_api_boilerplate/blob/master/src/rest_api/pkg/mongodb/user_service.go
+*/
 
 /*
 ===================================GROUP DB MODEL AND SERVICE=============================================
@@ -220,7 +420,21 @@ func (p *groupService) GroupsFind() ([]*Group, error) {
 }
 
 /*
-===================================ROUTER FUNCTIONALITY=============================================
+// TODO ADD GroupFind SERVICE FUNCTION HERE:
+https://github.com/JECSand/restful_api_boilerplate/blob/master/src/rest_api/pkg/mongodb/group_service.go
+*/
+
+/*
+===================================USER ROUTER FUNCTIONALITY=============================================
+*/
+
+/*
+// TODO ADD USER ROUTER HERE:
+https://github.com/JECSand/restful_api_boilerplate/blob/master/src/rest_api/pkg/server/user_router.go
+*/
+
+/*
+===================================GROUP ROUTER FUNCTIONALITY=============================================
 */
 
 type groupRouter struct {
