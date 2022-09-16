@@ -15,7 +15,7 @@ type groupRouter struct {
 func NewGroupRouter(router *mux.Router, g GroupService, db *DBClient) *mux.Router {
 	gRouter := groupRouter{g}
 	router.HandleFunc("/groups", HandleOptionsRequest).Methods("OPTIONS")
-	router.HandleFunc("/groups", gRouter.GroupsShow).Methods("GET")
+	router.HandleFunc("/groups", AdminTokenVerifyMiddleWare(gRouter.GroupsShow, db)).Methods("GET")
 	router.HandleFunc("/groups", AdminTokenVerifyMiddleWare(gRouter.CreateGroup, db)).Methods("POST")
 	return router
 }
