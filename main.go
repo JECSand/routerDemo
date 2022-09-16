@@ -436,28 +436,29 @@ func (db *DBClient) Close() error {
 	return err
 }
 
+// findOne ...
+func (db *DBClient) findOne(filter bson.D, collectionName string, dataModel interface{}) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	err := db.client.Database(os.Getenv("DATABASE")).Collection(collectionName).FindOne(ctx, filter).Decode(dataModel)
+	if err != nil {
+		return errors.New(collectionName + " not found")
+	}
+	return nil
+}
+
 // FindOneUser Function to get a user from datasource with custom filter
 func (db *DBClient) FindOneUser(filter bson.D) (*User, error) {
 	var model = newUserModel(&User{})
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	err := db.client.Database(os.Getenv("DATABASE")).Collection("users").FindOne(ctx, filter).Decode(&model)
-	if err != nil {
-		return &User{}, errors.New("user not found")
-	}
-	return model.toRootUser(), nil
+	err := db.findOne(filter, "users", &model)
+	return model.toRootUser(), err
 }
 
 // FindOneGroup Function to get a user from datasource with custom filter
 func (db *DBClient) FindOneGroup(filter bson.D) (*Group, error) {
 	var model = newGroupModel(&Group{})
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	err := db.client.Database(os.Getenv("DATABASE")).Collection("groups").FindOne(ctx, filter).Decode(&model)
-	if err != nil {
-		return &Group{}, errors.New("group not found")
-	}
-	return model.toRootGroup(), nil
+	err := db.findOne(filter, "groups", &model)
+	return model.toRootGroup(), err
 }
 
 /*
@@ -685,7 +686,14 @@ func (p *userService) UserDelete(u *User) (*User, error) {
 	if u.GroupId != "" {
 		findFilter = bson.M{"uuid": u.Uuid, "group_id": u.GroupId}
 	}
-	err := p.collection.FindOneAndDelete(ctx, findFilter).Decode(&user)
+	//err := p.collection.FindOneAndDelete(ctx, findFilter).Decode(&user)
+	currentTime := time.Now().UTC()
+	update := bson.D{{"$set",
+		bson.D{
+			{"deleted_at", currentTime.String()},
+		},
+	}}
+	_, err := p.collection.UpdateOne(ctx, findFilter, update)
 	if err != nil {
 		return &User{}, err
 	}
