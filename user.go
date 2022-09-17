@@ -1,6 +1,10 @@
 package main
 
-import "time"
+import (
+	"encoding/json"
+	"go.mongodb.org/mongo-driver/bson"
+	"time"
+)
 
 // User is a root struct that is used to store the json encoded data for/from a mongodb user doc.
 type User struct {
@@ -15,6 +19,24 @@ type User struct {
 	GroupId          string `json:"group_id,omitempty"`
 	LastModified     string `json:"last_modified,omitempty"`
 	CreationDatetime string `json:"creation_datetime,omitempty"`
+}
+
+// bsonFilter
+func (g *User) bsonFilter() (bson.D, error) {
+	jsonStr, err := json.Marshal(g)
+	if err != nil {
+		return bson.D{}, err
+	}
+	return bsonBuildProcess(string(jsonStr)), nil
+}
+
+// bsonUpdate
+func (g *User) bsonUpdate() (bson.D, error) {
+	inner, err := g.bsonFilter()
+	if err != nil {
+		return bson.D{}, err
+	}
+	return bson.D{{"$set", inner}}, nil
 }
 
 // BuildUpdate is a function that setups the base user struct during a user modification request

@@ -1,6 +1,10 @@
 package main
 
-import "time"
+import (
+	"encoding/json"
+	"go.mongodb.org/mongo-driver/bson"
+	"time"
+)
 
 // Group is a root struct that is used to store the json encoded data for/from a mongodb group doc.
 type Group struct {
@@ -10,6 +14,24 @@ type Group struct {
 	Name             string `json:"name,omitempty"`
 	LastModified     string `json:"last_modified,omitempty"`
 	CreationDatetime string `json:"creation_datetime,omitempty"`
+}
+
+// bsonFilter
+func (g *Group) bsonFilter() (bson.D, error) {
+	jsonStr, err := json.Marshal(g)
+	if err != nil {
+		return bson.D{}, err
+	}
+	return bsonBuildProcess(string(jsonStr)), nil
+}
+
+// bsonUpdate
+func (g *Group) bsonUpdate() (bson.D, error) {
+	inner, err := g.bsonFilter()
+	if err != nil {
+		return bson.D{}, err
+	}
+	return bson.D{{"$set", inner}}, nil
 }
 
 // addTimeStamps updates a Group struct with a timestamp

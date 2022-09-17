@@ -158,14 +158,7 @@ func (p *userService) UserDelete(u *User) (*User, error) {
 	if u.GroupId != "" {
 		findFilter = bson.M{"uuid": u.Uuid, "group_id": u.GroupId}
 	}
-	//err := p.collection.FindOneAndDelete(ctx, findFilter).Decode(&user)
-	currentTime := time.Now().UTC()
-	update := bson.D{{"$set",
-		bson.D{
-			{"deleted_at", currentTime.String()},
-		},
-	}}
-	_, err := p.collection.UpdateOne(ctx, findFilter, update)
+	err := p.collection.FindOneAndDelete(ctx, findFilter).Decode(&user)
 	if err != nil {
 		return &User{}, err
 	}
@@ -245,44 +238,21 @@ func (p *userService) UserUpdate(u *User) (*User, error) {
 		return &User{}, errors.New("no users found")
 	}
 	filter := bson.D{{"uuid", u.Uuid}}
-	currentTime := time.Now().UTC()
 	if len(u.Password) != 0 {
 		password := []byte(u.Password)
 		hashedPassword, err := bcrypt.GenerateFromPassword(password, bcrypt.DefaultCost)
+		u.Password = string(hashedPassword)
 		if err != nil {
 			return &User{}, err
 		}
-		update := bson.D{{"$set",
-			bson.D{
-				{"password", string(hashedPassword)},
-				{"firstname", u.FirstName},
-				{"lastname", u.LastName},
-				{"username", u.Username},
-				{"email", u.Email},
-				{"role", u.Role},
-				{"group_id", u.GroupId},
-				{"last_modified", currentTime.String()},
-			},
-		}}
-		_, err = p.collection.UpdateOne(ctx, filter, update)
+		err = p.db.UpdateOne(filter, u, "users")
 		if err != nil {
 			return &User{}, err
 		}
 		u.Password = ""
 		return u, nil
 	}
-	update := bson.D{{"$set",
-		bson.D{
-			{"firstname", u.FirstName},
-			{"lastname", u.LastName},
-			{"username", u.Username},
-			{"email", u.Email},
-			{"role", u.Role},
-			{"group_id", u.GroupId},
-			{"last_modified", currentTime.String()},
-		},
-	}}
-	_, err = p.collection.UpdateOne(ctx, filter, update)
+	err = p.db.UpdateOne(filter, u, "users")
 	if err != nil {
 		return &User{}, err
 	}

@@ -7,6 +7,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -17,6 +18,26 @@ func generateUUID() (string, error) {
 		return "", err
 	}
 	return curId.String(), nil
+}
+
+// jsonStrToArray
+func jsonStrToArray(jsonString string) []string {
+	replacer := strings.NewReplacer("\",\"", "|", "{", "", "}", "", "\"", "")
+	newString := replacer.Replace(jsonString)
+	return strings.Split(newString, "|")
+}
+
+// bsonBuildProcess inputs a json stringed structure and returns a representation bson.D
+func bsonBuildProcess(jsonStr string) bson.D {
+	var filter bson.D
+	if string(jsonStr) != "{}" {
+		fieldArray := jsonStrToArray(jsonStr)
+		for _, elElement := range fieldArray {
+			keys := strings.Split(elElement, ":")
+			filter = append(filter, bson.E{Key: keys[0], Value: keys[1]})
+		}
+	}
+	return filter
 }
 
 // HandleOptionsRequest handles incoming OPTIONS request

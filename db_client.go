@@ -10,6 +10,13 @@ import (
 	"time"
 )
 
+// dbModel is an abstraction of the db model types
+type dbModel interface {
+	bsonFilter() (bson.D, error)
+	bsonUpdate() (bson.D, error)
+	addTimeStamps(newRecord bool)
+}
+
 // DBClient manages a database connection
 type DBClient struct {
 	connectionURI string
@@ -40,7 +47,7 @@ func (db *DBClient) Close() error {
 	return err
 }
 
-// findOne ...
+// findOne mongodb doc
 func (db *DBClient) findOne(filter bson.D, collectionName string, dataModel interface{}) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -49,6 +56,31 @@ func (db *DBClient) findOne(filter bson.D, collectionName string, dataModel inte
 		return errors.New(collectionName + " not found")
 	}
 	return nil
+}
+
+// updateOne is used to update a single mongodb doc
+func (db *DBClient) updateOne(filter bson.D, update bson.D, collectionName string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	_, err := db.client.Database(os.Getenv("DATABASE")).Collection(collectionName).UpdateOne(ctx, filter, update)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// UpdateOne Function to get a user from datasource with custom filter
+func (db *DBClient) UpdateOne(filter bson.D, m dbModel, collectionName string) error {
+	m.addTimeStamps(false)
+	update, err := m.bsonUpdate()
+	if err != nil {
+		return err
+	}
+	err = db.updateOne(filter, update, collectionName)
+	if err != nil {
+		return err
+	}
+	return err
 }
 
 // FindOneUser Function to get a user from datasource with custom filter
