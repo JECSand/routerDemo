@@ -12,8 +12,9 @@ import (
 
 // dbModel is an abstraction of the db model types
 type dbModel interface {
-	bsonFilter() (bson.D, error)
-	bsonUpdate() (bson.D, error)
+	toDoc() (doc bson.D, err error)
+	bsonFilter() (doc bson.D, err error)
+	bsonUpdate() (doc bson.D, err error)
 	addTimeStamps(newRecord bool)
 }
 
@@ -84,15 +85,37 @@ func (db *DBClient) UpdateOne(filter bson.D, m dbModel, collectionName string) e
 }
 
 // FindOneUser Function to get a user from datasource with custom filter
-func (db *DBClient) FindOneUser(filter bson.D) (*User, error) {
-	var model = newUserModel(&User{})
-	err := db.findOne(filter, "users", &model)
-	return model.toRootUser(), err
+func (db *DBClient) FindOneUser(user *User) (*User, error) {
+	um, err := newUserModel(user)
+	if err != nil {
+		return user, err
+	}
+	filter, err := um.bsonFilter()
+	if err != nil {
+		return user, err
+	}
+	model, err := newUserModel(&User{})
+	if err != nil {
+		return &User{}, err
+	}
+	err = db.findOne(filter, "users", &model)
+	return model.toRoot(), err
 }
 
 // FindOneGroup Function to get a user from datasource with custom filter
-func (db *DBClient) FindOneGroup(filter bson.D) (*Group, error) {
-	var model = newGroupModel(&Group{})
-	err := db.findOne(filter, "groups", &model)
-	return model.toRootGroup(), err
+func (db *DBClient) FindOneGroup(group *Group) (*Group, error) {
+	gm, err := newGroupModel(group)
+	if err != nil {
+		return group, err
+	}
+	filter, err := gm.bsonFilter()
+	if err != nil {
+		return group, err
+	}
+	model, err := newGroupModel(&Group{})
+	if err != nil {
+		return &Group{}, err
+	}
+	err = db.findOne(filter, "groups", &model)
+	return model.toRoot(), err
 }

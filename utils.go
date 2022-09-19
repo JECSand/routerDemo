@@ -3,41 +3,17 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"github.com/gofrs/uuid"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 )
 
-// generateUUID for index keying records of data
-func generateUUID() (string, error) {
-	curId, err := uuid.NewV4()
-	if err != nil {
-		return "", err
-	}
-	return curId.String(), nil
-}
-
-// jsonStrToArray
-func jsonStrToArray(jsonString string) []string {
-	replacer := strings.NewReplacer("\",\"", "|", "{", "", "}", "", "\"", "")
-	newString := replacer.Replace(jsonString)
-	return strings.Split(newString, "|")
-}
-
-// bsonBuildProcess inputs a json stringed structure and returns a representation bson.D
-func bsonBuildProcess(jsonStr string) bson.D {
-	var filter bson.D
-	if string(jsonStr) != "{}" {
-		fieldArray := jsonStrToArray(jsonStr)
-		for _, elElement := range fieldArray {
-			keys := strings.Split(elElement, ":")
-			filter = append(filter, bson.E{Key: keys[0], Value: keys[1]})
-		}
-	}
-	return filter
+// generateObjectID for index keying records of data
+func generateObjectID() string {
+	newId := primitive.NewObjectID()
+	return newId.Hex()
 }
 
 // HandleOptionsRequest handles incoming OPTIONS request
@@ -68,11 +44,11 @@ func SetResponseHeaders(w http.ResponseWriter, authToken string, apiKey string) 
 
 // AdminRouteRoleCheck checks admin routes JWT tokens to ensure that a group admin does not break scope
 func AdminRouteRoleCheck(decodedToken *TokenData) string {
-	groupUuid := ""
-	if decodedToken.Role != "master_admin" {
-		groupUuid = decodedToken.GroupId
+	groupId := ""
+	if decodedToken.RootAdmin {
+		groupId = decodedToken.GroupId
 	}
-	return groupUuid
+	return groupId
 }
 
 // jsonErr structures a standard error to return
@@ -111,35 +87,20 @@ func respondWithError(w http.ResponseWriter, status int, error JWTError) {
 	}
 }
 
-// returnInitialCheckErrMsg
-func returnInitialCheckErrMsg(userErr string, groupErr string, s1 string, s2 string) string {
-	errMsg := "Error: "
-	if userErr == "NotFound" && groupErr == "NotFound" {
-		errMsg += "Invalid " + s1 + " and Invalid " + s2
-	} else if userErr == "NotFound" {
-		errMsg += "Invalid " + s1
-	} else if groupErr == "NotFound" {
-		errMsg += "Invalid " + s2
-	}
-	return errMsg
-}
-
-// verifyTokenUser verify Token User
+// verifyTokenUser verifies Token's User
 func verifyTokenUser(decodedToken *TokenData, db *DBClient) (bool, string) {
-	checkUser, err := db.FindOneUser(bson.D{{"uuid", decodedToken.UserId}})
+	tUser := decodedToken.toUser()
+	checkUser, err := db.FindOneUser(tUser)
 	if err != nil {
 		return false, err.Error()
 	}
-	checkGroup, err := db.FindOneGroup(bson.D{{"uuid", decodedToken.GroupId}})
+	checkGroup, err := db.FindOneGroup(&Group{Id: tUser.GroupId})
 	if err != nil {
 		return false, err.Error()
-	}
-	if checkUser.Username == "NotFound" || checkGroup.Name == "NotFound" {
-		return false, returnInitialCheckErrMsg(checkUser.Username, checkGroup.Name, "User", "group")
 	}
 	// get User's and User's group docs based on token's user uuid
-	if checkUser.GroupId != decodedToken.GroupId {
-		return false, "Incorrect group Uuid"
+	if checkUser.GroupId != checkGroup.Id {
+		return false, "Incorrect group id"
 	}
 	return true, "No Error"
 }
@@ -161,7 +122,7 @@ func tokenVerifyMiddleWare(roleType string, next http.HandlerFunc, db *DBClient,
 	}
 	verified, verifyMsg := verifyTokenUser(decodedToken, db)
 	if verified {
-		if roleType == "Admin" && decodedToken.Role == "master_admin" {
+		if roleType == "Admin" && decodedToken.Role == "admin" {
 			next.ServeHTTP(w, r)
 		} else if roleType != "Admin" {
 			next.ServeHTTP(w, r)

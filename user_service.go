@@ -24,14 +24,14 @@ func NewUserService(db *DBClient) *userService {
 
 // AuthenticateUser is used to authenticate users that are signing in
 func (p *userService) AuthenticateUser(user *User) (*User, error) {
-	var checkUser = newUserModel(&User{})
+	checkUser, err := newUserModel(&User{})
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	err := p.collection.FindOne(ctx, bson.M{"email": user.Email}).Decode(&checkUser)
+	err = p.collection.FindOne(ctx, bson.M{"email": user.Email}).Decode(&checkUser)
 	if err != nil {
 		return user, errors.New("invalid email")
 	}
-	rootUser := checkUser.toRootUser()
+	rootUser := checkUser.toRoot()
 	password := []byte(user.Password)
 	checkPassword := []byte(checkUser.Password)
 	err = bcrypt.CompareHashAndPassword(checkPassword, password)
@@ -42,14 +42,21 @@ func (p *userService) AuthenticateUser(user *User) (*User, error) {
 }
 
 // BlacklistAuthToken is used during sign-out to add the now invalid auth-token/api key to the blacklist collection
-func (p *userService) BlacklistAuthToken(authToken string) {
+func (p *userService) BlacklistAuthToken(authToken string) error {
 	var blacklist Blacklist
 	blacklist.AuthToken = authToken
-	blacklist.addTimeStamps(true)
-	blModel := newBlacklistModel(&blacklist)
+	blModel, err := newBlacklistModel(&blacklist)
+	if err != nil {
+		return err
+	}
+	blModel.addTimeStamps(true)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	p.db.client.Database(os.Getenv("DATABASE")).Collection("blacklists").InsertOne(ctx, blModel)
+	_, err = p.db.client.Database(os.Getenv("DATABASE")).Collection("blacklists").InsertOne(ctx, blModel)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // RefreshToken is used to refresh an existing & valid JWT token
@@ -57,21 +64,21 @@ func (p *userService) RefreshToken(tokenData *TokenData) (*User, error) {
 	if tokenData.UserId == "" {
 		return &User{}, errors.New("token missing an userId")
 	}
-	return p.UserFind(&User{Uuid: tokenData.UserId, GroupId: tokenData.GroupId})
+	return p.UserFind(&User{Id: tokenData.UserId, GroupId: tokenData.GroupId})
 }
 
 // UpdatePassword is used to update the currently logged-in user's password
-func (p *userService) UpdatePassword(tokenData *TokenData, CurrentPassword string, newPassword string) (*User, error) {
-	var user = newUserModel(&User{})
+func (p *userService) UpdatePassword(tokenData *TokenData, currentPassword string, newPassword string) (*User, error) {
+	user, err := newUserModel(&User{})
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	err := p.collection.FindOne(ctx, bson.M{"uuid": tokenData.UserId}).Decode(&user)
+	err = p.collection.FindOne(ctx, bson.M{"_id": tokenData.UserId}).Decode(&user)
 	if err != nil {
 		return &User{}, errors.New("invalid user id")
 	}
 	// 2. Check current password
-	curUser := user.toRootUser()
-	password := []byte(CurrentPassword)
+	curUser := user.toRoot()
+	password := []byte(currentPassword)
 	checkPassword := []byte(curUser.Password)
 	err = bcrypt.CompareHashAndPassword(checkPassword, password)
 	if err == nil {
@@ -81,11 +88,15 @@ func (p *userService) UpdatePassword(tokenData *TokenData, CurrentPassword strin
 		if err != nil {
 			return curUser, err
 		}
-		filter := bson.D{{"uuid", curUser.Uuid}}
+		um, err := newUserModel(curUser)
+		if err != nil {
+			return curUser, err
+		}
+		filter := bson.D{{"_id", um.Id}}
 		update := bson.D{{"$set",
 			bson.D{
 				{"password", string(hashedPassword)},
-				{"last_modified", currentTime.String()},
+				{"last_modified", currentTime},
 			},
 		}}
 		_, err = p.collection.UpdateOne(ctx, filter, update)
@@ -98,71 +109,79 @@ func (p *userService) UpdatePassword(tokenData *TokenData, CurrentPassword strin
 }
 
 // UserCreate is used to create a new user
-func (p *userService) UserCreate(user *User) (*User, error) {
-	var checkUser = newUserModel(&User{})
-	var checkGroup = newGroupModel(&Group{})
+func (p *userService) UserCreate(u *User) (*User, error) {
+	checkUser, err := newUserModel(&User{})
+	if err != nil {
+		return u, err
+	}
+	checkGroup, err := newGroupModel(&Group{})
+	if err != nil {
+		return u, err
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	docCount, err := p.collection.CountDocuments(ctx, bson.M{})
 	if err != nil {
-		return user, err
+		return u, err
 	}
-	usernameErr := p.collection.FindOne(ctx, bson.M{"username": user.Username, "group_id": user.GroupId}).Decode(&checkUser)
-	emailErr := p.collection.FindOne(ctx, bson.M{"email": user.Email}).Decode(&checkUser)
-	groupErr := p.db.client.Database(os.Getenv("DATABASE")).Collection("groups").FindOne(ctx, bson.M{"uuid": user.GroupId}).Decode(&checkGroup)
-	if usernameErr == nil {
-		return &User{}, errors.New("username has been taken")
-	} else if emailErr == nil {
+	um, err := newUserModel(u)
+	if err != nil {
+		return u, err
+	}
+	emailErr := p.collection.FindOne(ctx, bson.M{"email": um.Email}).Decode(&checkUser)
+	groupErr := p.db.client.Database(os.Getenv("DATABASE")).Collection("groups").FindOne(ctx, bson.M{"_id": um.GroupId}).Decode(&checkGroup)
+	if emailErr == nil {
 		return &User{}, errors.New("email has been taken")
 	} else if groupErr != nil {
 		return &User{}, errors.New("invalid group id")
 	}
-	user.Uuid, err = generateUUID()
-	if err != nil {
-		return user, err
-	}
-	password := []byte(user.Password)
+	u.Id = generateObjectID()
+	password := []byte(u.Password)
 	hashedPassword, err := bcrypt.GenerateFromPassword(password, bcrypt.DefaultCost)
 	if err != nil {
-		return user, err
+		return u, err
 	}
-	user.Password = string(hashedPassword)
+	u.Password = string(hashedPassword)
+	u.RootAdmin = false
 	if docCount == 0 {
-		user.Role = "master_admin"
-	} else {
-		if user.Role != "master_admin" && user.Role != "group_admin" {
-			user.Role = "member"
-		} else {
-			if user.Role == "master_admin" {
-				var masterGroup = newGroupModel(&Group{})
-				err = p.db.client.Database(os.Getenv("DATABASE")).Collection("groups").FindOne(ctx, bson.M{"name": os.Getenv("ROOT_GROUP")}).Decode(&masterGroup)
-				if groupErr != nil {
-					return &User{}, errors.New("root group not found")
-				}
-				user.GroupId = masterGroup.Uuid
-			}
-		}
+		u.Role = "admin"
+		u.RootAdmin = true
+	} else if u.Role != "admin" {
+		u.Role = "member"
 	}
-	user.addTimeStamps(true)
-	uModel := newUserModel(user)
-	p.collection.InsertOne(ctx, uModel)
-	return uModel.toRootUser(), nil
+	um, err = newUserModel(u)
+	if err != nil {
+		return u, err
+	}
+	um.addTimeStamps(true)
+	_, err = p.collection.InsertOne(ctx, um)
+	if err != nil {
+		return u, err
+	}
+	return um.toRoot(), nil
 }
 
 // UserDelete is used to delete an User
 func (p *userService) UserDelete(u *User) (*User, error) {
-	var user = newUserModel(&User{})
+	user, err := newUserModel(&User{})
+	if err != nil {
+		return u, err
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	findFilter := bson.M{"uuid": u.Uuid}
-	if u.GroupId != "" {
-		findFilter = bson.M{"uuid": u.Uuid, "group_id": u.GroupId}
+	um, err := newUserModel(u)
+	if err != nil {
+		return u, err
 	}
-	err := p.collection.FindOneAndDelete(ctx, findFilter).Decode(&user)
+	findFilter := bson.M{"_id": um.Id}
+	if u.GroupId != "" {
+		findFilter = bson.M{"_id": um.Id, "group_id": um.GroupId}
+	}
+	err = p.collection.FindOneAndDelete(ctx, findFilter).Decode(&user)
 	if err != nil {
 		return &User{}, err
 	}
-	return user.toRootUser(), nil
+	return user.toRoot(), nil
 }
 
 // UsersFind is used to find all user docs
@@ -170,9 +189,13 @@ func (p *userService) UsersFind(u *User) ([]*User, error) {
 	var users []*User
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+	um, err := newUserModel(u)
+	if err != nil {
+		return users, err
+	}
 	findFilter := bson.M{}
 	if u.GroupId != "" {
-		findFilter = bson.M{"group_id": u.GroupId}
+		findFilter = bson.M{"group_id": um.GroupId}
 	}
 	cursor, err := p.collection.Find(ctx, findFilter)
 	if err != nil {
@@ -180,56 +203,76 @@ func (p *userService) UsersFind(u *User) ([]*User, error) {
 	}
 	defer cursor.Close(ctx)
 	for cursor.Next(ctx) {
-		var user = newUserModel(&User{})
+		user, err := newUserModel(&User{})
+		if err != nil {
+			return users, err
+		}
 		cursor.Decode(&user)
 		user.Password = ""
-		users = append(users, user.toRootUser())
+		users = append(users, user.toRoot())
 	}
 	return users, nil
 }
 
 // UserFind is used to find a specific user doc
 func (p *userService) UserFind(u *User) (*User, error) {
-	var user = newUserModel(&User{})
+	user, err := newUserModel(&User{})
+	if err != nil {
+		return u, err
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	findFilter := bson.M{"uuid": u.Uuid}
-	if u.GroupId != "" {
-		findFilter = bson.M{"uuid": u.Uuid, "group_id": u.GroupId}
+	um, err := newUserModel(u)
+	if err != nil {
+		return u, err
 	}
-	err := p.collection.FindOne(ctx, findFilter).Decode(&user)
+	findFilter := bson.M{"_id": um.Id}
+	if u.GroupId != "" {
+		findFilter = bson.M{"_id": um.Id, "group_id": um.GroupId}
+	}
+	err = p.collection.FindOne(ctx, findFilter).Decode(&user)
 	if err != nil {
 		return &User{}, err
 	}
-	return user.toRootUser(), nil
+	return user.toRoot(), nil
 }
 
 // UserUpdate is used to update an existing user doc
 func (p *userService) UserUpdate(u *User) (*User, error) {
-	var curUser = newUserModel(&User{})
-	var checkUser = newUserModel(&User{})
-	var checkGroup = newGroupModel(&Group{})
+	curUser, err := newUserModel(&User{})
+	if err != nil {
+		return u, err
+	}
+	checkUser, err := newUserModel(&User{})
+	if err != nil {
+		return u, err
+	}
+	checkGroup, err := newGroupModel(&Group{})
+	if err != nil {
+		return u, err
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	docCount, err := p.collection.CountDocuments(ctx, bson.M{})
 	if err != nil {
 		return &User{}, err
 	}
-	findFilter := bson.M{"uuid": u.Uuid}
+	um, err := newUserModel(u)
+	if err != nil {
+		return u, err
+	}
+	findFilter := bson.M{"_id": um.Id}
 	if u.GroupId != "" {
-		findFilter = bson.M{"uuid": u.Uuid, "group_id": u.GroupId}
+		findFilter = bson.M{"_id": um.Id, "group_id": um.GroupId}
 	}
 	err = p.collection.FindOne(ctx, findFilter).Decode(&curUser)
 	if err != nil {
 		return &User{}, errors.New("user not found")
 	}
 	u.BuildUpdate(curUser)
-	usernameErr := p.collection.FindOne(ctx, bson.M{"username": u.Username, "group_id": u.GroupId}).Decode(&checkUser)
-	emailErr := p.collection.FindOne(ctx, bson.M{"email": u.Email}).Decode(&checkUser)
-	groupErr := p.db.client.Database(os.Getenv("DATABASE")).Collection("groups").FindOne(ctx, bson.M{"uuid": u.GroupId}).Decode(&checkGroup)
-	if usernameErr == nil && curUser.Username != u.Username {
-		return &User{}, errors.New("username is taken")
-	} else if emailErr == nil && curUser.Email != u.Email {
+	emailErr := p.collection.FindOne(ctx, bson.M{"email": um.Email}).Decode(&checkUser)
+	groupErr := p.db.client.Database(os.Getenv("DATABASE")).Collection("groups").FindOne(ctx, bson.M{"_id": um.GroupId}).Decode(&checkGroup)
+	if emailErr == nil && curUser.Email != u.Email {
 		return &User{}, errors.New("email is taken")
 	} else if groupErr != nil {
 		return &User{}, errors.New("invalid group id")
@@ -237,26 +280,30 @@ func (p *userService) UserUpdate(u *User) (*User, error) {
 	if docCount == 0 {
 		return &User{}, errors.New("no users found")
 	}
-	filter := bson.D{{"uuid", u.Uuid}}
+	filter := bson.D{{"_id", um.Id}}
+	um, err = newUserModel(u)
+	if err != nil {
+		return u, err
+	}
 	if len(u.Password) != 0 {
 		password := []byte(u.Password)
 		hashedPassword, err := bcrypt.GenerateFromPassword(password, bcrypt.DefaultCost)
-		u.Password = string(hashedPassword)
+		um.Password = string(hashedPassword)
 		if err != nil {
 			return &User{}, err
 		}
-		err = p.db.UpdateOne(filter, u, "users")
+		err = p.db.UpdateOne(filter, um, "users")
 		if err != nil {
 			return &User{}, err
 		}
-		u.Password = ""
-		return u, nil
+		um.Password = ""
+		return um.toRoot(), nil
 	}
-	err = p.db.UpdateOne(filter, u, "users")
+	err = p.db.UpdateOne(filter, um, "users")
 	if err != nil {
 		return &User{}, err
 	}
-	return u, nil
+	return um.toRoot(), nil
 }
 
 // UserDocInsert is used to insert user doc directly into mongodb for testing purposes
@@ -267,12 +314,16 @@ func (p *userService) UserDocInsert(u *User) (*User, error) {
 		return u, err
 	}
 	u.Password = string(hashedPassword)
-	var insertUser = newUserModel(u)
+	insertUser, err := newUserModel(u)
+	insertUser.addTimeStamps(true)
+	if err != nil {
+		return u, err
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	_, err = p.collection.InsertOne(ctx, insertUser)
 	if err != nil {
 		return u, err
 	}
-	return insertUser.toRootUser(), nil
+	return insertUser.toRoot(), nil
 }

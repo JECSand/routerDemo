@@ -1,48 +1,105 @@
 package main
 
-import "go.mongodb.org/mongo-driver/bson/primitive"
+import (
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"time"
+)
 
+// userModel structures a group BSON document to save in a users collection
 type userModel struct {
-	Id               primitive.ObjectID `bson:"_id,omitempty"`
-	Uuid             string             `bson:"uuid,omitempty"`
-	Username         string             `bson:"username,omitempty"`
-	Password         string             `bson:"password,omitempty"`
-	FirstName        string             `bson:"firstname,omitempty"`
-	LastName         string             `bson:"lastname,omitempty"`
-	Email            string             `bson:"email,omitempty"`
-	Role             string             `bson:"role,omitempty"`
-	GroupId          string             `bson:"group_id,omitempty"`
-	LastModified     string             `bson:"last_modified,omitempty"`
-	CreationDatetime string             `bson:"creation_datetime,omitempty"`
+	Id           primitive.ObjectID `bson:"_id,omitempty"`
+	Username     string             `bson:"username,omitempty"`
+	Password     string             `bson:"password,omitempty"`
+	FirstName    string             `bson:"firstname,omitempty"`
+	LastName     string             `bson:"lastname,omitempty"`
+	Email        string             `bson:"email,omitempty"`
+	Role         string             `bson:"role,omitempty"`
+	RootAdmin    bool               `bson:"root_admin,omitempty"`
+	GroupId      primitive.ObjectID `bson:"group_id,omitempty"`
+	LastModified time.Time          `bson:"last_modified,omitempty"`
+	CreatedAt    time.Time          `bson:"created_at,omitempty"`
+	DeletedAt    time.Time          `bson:"deleted_at,omitempty"`
 }
 
-func newUserModel(u *User) *userModel {
-	return &userModel{
-		Uuid:             u.Uuid,
-		Username:         u.Username,
-		Password:         u.Password,
-		FirstName:        u.FirstName,
-		LastName:         u.LastName,
-		Email:            u.Email,
-		Role:             u.Role,
-		GroupId:          u.GroupId,
-		LastModified:     u.LastModified,
-		CreationDatetime: u.CreationDatetime,
+// newUserModel initializes a new pointer to a userModel struct from a pointer to a JSON User struct
+func newUserModel(u *User) (um *userModel, err error) {
+	um = &userModel{
+		Username:     u.Username,
+		Password:     u.Password,
+		FirstName:    u.FirstName,
+		LastName:     u.LastName,
+		Email:        u.Email,
+		Role:         u.Role,
+		RootAdmin:    u.RootAdmin,
+		LastModified: u.LastModified,
+		CreatedAt:    u.CreatedAt,
+		DeletedAt:    u.DeletedAt,
+	}
+	if u.Id != "" {
+		um.Id, err = primitive.ObjectIDFromHex(u.Id)
+	}
+	if u.GroupId != "" {
+		um.GroupId, err = primitive.ObjectIDFromHex(u.GroupId)
+	}
+	return
+}
+
+// addTimeStamps updates an userModel struct with a timestamp
+func (u *userModel) addTimeStamps(newRecord bool) {
+	currentTime := time.Now().UTC()
+	u.LastModified = currentTime
+	if newRecord {
+		u.CreatedAt = currentTime
 	}
 }
 
-func (u *userModel) toRootUser() *User {
+// toDoc converts the bson userModel into a bson.D
+func (u *userModel) toDoc() (doc bson.D, err error) {
+	data, err := bson.Marshal(u)
+	if err != nil {
+		return
+	}
+	err = bson.Unmarshal(data, &doc)
+	return
+}
+
+// bsonFilter generates a bson filter for MongoDB queries from the userModel data
+func (u *userModel) bsonFilter() (doc bson.D, err error) {
+	if u.Id.Hex() != "" {
+		doc = bson.D{{"_id", u.Id}}
+	} else if u.GroupId.Hex() != "" {
+		doc = bson.D{{"group_id", u.GroupId}}
+	} else if u.Email != "" {
+		doc = bson.D{{"email", u.Email}}
+	}
+	return
+}
+
+// bsonUpdate generates a bson update for MongoDB queries from the userModel data
+func (u *userModel) bsonUpdate() (doc bson.D, err error) {
+	inner, err := u.toDoc()
+	if err != nil {
+		return
+	}
+	doc = bson.D{{"$set", inner}}
+	return
+}
+
+// toRoot creates and return a new pointer to a User JSON struct from a pointer to a BSON userModel
+func (u *userModel) toRoot() *User {
 	return &User{
-		Id:               u.Id.Hex(),
-		Uuid:             u.Uuid,
-		Username:         u.Username,
-		Password:         u.Password,
-		FirstName:        u.FirstName,
-		LastName:         u.LastName,
-		Email:            u.Email,
-		Role:             u.Role,
-		GroupId:          u.GroupId,
-		LastModified:     u.LastModified,
-		CreationDatetime: u.CreationDatetime,
+		Id:           u.Id.Hex(),
+		Username:     u.Username,
+		Password:     u.Password,
+		FirstName:    u.FirstName,
+		LastName:     u.LastName,
+		Email:        u.Email,
+		Role:         u.Role,
+		RootAdmin:    u.RootAdmin,
+		GroupId:      u.GroupId.Hex(),
+		LastModified: u.LastModified,
+		CreatedAt:    u.CreatedAt,
+		DeletedAt:    u.DeletedAt,
 	}
 }

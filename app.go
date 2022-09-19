@@ -40,13 +40,13 @@ func (a *App) Initialize() error {
 	group.Name = os.Getenv("ROOT_GROUP")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	docCount, _ := a.client.client.Database(os.Getenv("DATABASE")).Collection("groups").CountDocuments(ctx, bson.M{})
+	docCount, err := a.client.client.Database(os.Getenv("DATABASE")).Collection("groups").CountDocuments(ctx, bson.M{})
+	if err != nil {
+		return err
+	}
 	if docCount == 0 {
-		group.GroupType = "master_admins"
-		group.Uuid, err = generateUUID()
-		if err != nil {
-			return err
-		}
+		group.RootAdmin = true
+		group.Id = generateObjectID()
 		adminGroup, err := gService.GroupCreate(&group)
 		if err != nil {
 			return err
@@ -56,7 +56,7 @@ func (a *App) Initialize() error {
 		adminUser.Password = os.Getenv("ROOT_PASSWORD")
 		adminUser.FirstName = "root"
 		adminUser.LastName = "admin"
-		adminUser.GroupId = adminGroup.Uuid
+		adminUser.GroupId = adminGroup.Id
 		_, err = uService.UserCreate(&adminUser)
 		if err != nil {
 			return err

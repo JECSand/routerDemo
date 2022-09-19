@@ -80,7 +80,7 @@ func (ur *userRouter) ModifyUser(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	userId := vars["userId"]
 	var user User
-	user.Uuid = userId
+	user.Id = userId
 	body, err := io.ReadAll(io.LimitReader(r.Body, 1048576))
 	if err != nil {
 		return
@@ -230,14 +230,11 @@ func (ur *userRouter) RegisterUser(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		var group Group
-		groupName := user.Username
+		groupName := user.Email
 		groupName += "_group"
 		group.Name = groupName
-		group.GroupType = "normal"
-		group.Uuid, err = generateUUID()
-		if err != nil {
-			return
-		}
+		group.Id = generateObjectID()
+		group.RootAdmin = false
 		g, err := ur.gService.GroupCreate(&group)
 		if err != nil {
 			w = SetResponseHeaders(w, "", "")
@@ -247,8 +244,8 @@ func (ur *userRouter) RegisterUser(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		}
-		user.Role = "group_admin"
-		user.GroupId = g.Uuid
+		user.Role = "admin"
+		user.GroupId = g.Id
 		u, err := ur.uService.UserCreate(&user)
 		if err != nil {
 			w = SetResponseHeaders(w, "", "")
@@ -291,9 +288,9 @@ func (ur *userRouter) CreateUser(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	groupUuid := AdminRouteRoleCheck(decodedToken)
-	if groupUuid != "" {
-		user.GroupId = groupUuid
+	groupId := AdminRouteRoleCheck(decodedToken)
+	if groupId != "" {
+		user.GroupId = groupId
 	}
 	u, err := ur.uService.UserCreate(&user)
 	if err != nil {
@@ -338,8 +335,8 @@ func (ur *userRouter) UserShow(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	groupUuid := AdminRouteRoleCheck(decodedToken)
-	user, err := ur.uService.UserFind(&User{Uuid: userId, GroupId: groupUuid})
+	groupId := AdminRouteRoleCheck(decodedToken)
+	user, err := ur.uService.UserFind(&User{Id: userId, GroupId: groupId})
 	if err != nil {
 		w = SetResponseHeaders(w, "", "")
 		w.WriteHeader(http.StatusNotFound)
@@ -365,8 +362,8 @@ func (ur *userRouter) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	groupUuid := AdminRouteRoleCheck(decodedToken)
-	user, err := ur.uService.UserDelete(&User{Uuid: userId, GroupId: groupUuid})
+	groupId := AdminRouteRoleCheck(decodedToken)
+	user, err := ur.uService.UserDelete(&User{Id: userId, GroupId: groupId})
 	if err != nil {
 		w = SetResponseHeaders(w, "", "")
 		w.WriteHeader(http.StatusNotFound)
@@ -375,7 +372,7 @@ func (ur *userRouter) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	if user.Uuid != "" {
+	if user.Id != "" {
 		w = SetResponseHeaders(w, "", "")
 		w.WriteHeader(http.StatusOK)
 		if err := json.NewEncoder(w).Encode("User Deleted"); err != nil {

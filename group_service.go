@@ -22,31 +22,32 @@ func NewGroupService(db *DBClient) *groupService {
 }
 
 // GroupCreate is used to create a new user group
-func (p *groupService) GroupCreate(group *Group) (*Group, error) {
-	if group.Name == "" {
-		return group, errors.New("new group must have a Name")
+func (p *groupService) GroupCreate(g *Group) (*Group, error) {
+	if g.Name == "" {
+		return g, errors.New("new group must have a Name")
 	}
-	var checkGroup = newGroupModel(&Group{})
-	var err error
+	checkGroup, err := newGroupModel(&Group{})
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	err = p.collection.FindOne(ctx, bson.M{"name": group.Name}).Decode(&checkGroup)
+	err = p.collection.FindOne(ctx, bson.M{"name": g.Name}).Decode(&checkGroup)
 	if err == nil {
 		return &Group{}, errors.New("group name exists")
 	}
-	group.addTimeStamps(true)
-	gModel := newGroupModel(group)
-	_, err = p.collection.InsertOne(ctx, gModel)
+	gm, err := newGroupModel(g)
 	if err != nil {
-		return group, err
+		return g, err
 	}
-	return gModel.toRootGroup(), nil
+	gm.addTimeStamps(true)
+	_, err = p.collection.InsertOne(ctx, gm)
+	if err != nil {
+		return g, err
+	}
+	return gm.toRoot(), nil
 }
 
 // GroupsFind is used to find all group docs in a MongoDB Collection
 func (p *groupService) GroupsFind() ([]*Group, error) {
 	var groups []*Group
-	var err error
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	cursor, err := p.collection.Find(ctx, bson.M{})
@@ -55,58 +56,73 @@ func (p *groupService) GroupsFind() ([]*Group, error) {
 	}
 	defer cursor.Close(ctx)
 	for cursor.Next(ctx) {
-		var group = newGroupModel(&Group{})
+		group, err := newGroupModel(&Group{})
+		if err != nil {
+			return groups, err
+		}
 		err = cursor.Decode(&group)
 		if err != nil {
 			return groups, err
 		}
-		groups = append(groups, group.toRootGroup())
+		groups = append(groups, group.toRoot())
 	}
 	return groups, nil
 }
 
 // GroupFind is used to find a specific group doc
 func (p *groupService) GroupFind(g *Group) (*Group, error) {
-	var group = newGroupModel(&Group{})
+	group, err := newGroupModel(&Group{})
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	err := p.collection.FindOne(ctx, bson.M{"uuid": g.Uuid}).Decode(&group)
+	gm, err := newGroupModel(g)
+	if err != nil {
+		return g, err
+	}
+	err = p.collection.FindOne(ctx, bson.M{"_id": gm.Id}).Decode(&group)
 	if err != nil {
 		return &Group{}, err
 	}
-	return group.toRootGroup(), nil
+	return group.toRoot(), nil
 }
 
 // GroupDelete is used to delete a group doc
 func (p *groupService) GroupDelete(g *Group) (*Group, error) {
-	var group = newGroupModel(&Group{})
+	group, err := newGroupModel(&Group{})
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	err := p.collection.FindOneAndDelete(ctx, bson.M{"uuid": g.Uuid}).Decode(&group)
+	gm, err := newGroupModel(g)
+	if err != nil {
+		return g, err
+	}
+	err = p.collection.FindOneAndDelete(ctx, bson.M{"_id": gm.Id}).Decode(&group)
 	if err != nil {
 		return &Group{}, err
 	}
-	return group.toRootGroup(), nil
+	return group.toRoot(), nil
 }
 
 // GroupUpdate is used to update an existing group
 func (p *groupService) GroupUpdate(g *Group) (*Group, error) {
-	var curGroup = newGroupModel(&Group{})
+	curGroup, err := newGroupModel(&Group{})
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	groupErr := p.collection.FindOne(ctx, bson.M{"uuid": g.Uuid}).Decode(&curGroup)
+	gm, err := newGroupModel(g)
+	if err != nil {
+		return g, err
+	}
+	groupErr := p.collection.FindOne(ctx, bson.M{"_id": gm.Id}).Decode(&curGroup)
 	if groupErr != nil {
 		return &Group{}, errors.New("group not found")
 	}
-	filter := bson.D{{"uuid", g.Uuid}}
+	filter := bson.D{{"_id", gm.Id}}
 	currentTime := time.Now().UTC()
 	update := bson.D{{"$set",
 		bson.D{
 			{"name", g.Name},
-			{"last_modified", currentTime.String()},
+			{"last_modified", currentTime},
 		},
 	}}
-	_, err := p.collection.UpdateOne(ctx, filter, update)
+	_, err = p.collection.UpdateOne(ctx, filter, update)
 	if err != nil {
 		return g, err
 	}
@@ -115,12 +131,13 @@ func (p *groupService) GroupUpdate(g *Group) (*Group, error) {
 
 // GroupDocInsert is used to insert a group doc directly into mongodb for testing purposes
 func (p *groupService) GroupDocInsert(g *Group) (*Group, error) {
-	var insertGroup = newGroupModel(g)
+	insertGroup, err := newGroupModel(g)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	_, err := p.collection.InsertOne(ctx, insertGroup)
+	insertGroup.addTimeStamps(true)
+	_, err = p.collection.InsertOne(ctx, insertGroup)
 	if err != nil {
 		return g, err
 	}
-	return insertGroup.toRootGroup(), nil
+	return insertGroup.toRoot(), nil
 }
