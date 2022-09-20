@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"time"
@@ -38,6 +39,22 @@ func (g *groupModel) addTimeStamps(newRecord bool) {
 	if newRecord {
 		g.CreatedAt = currentTime
 	}
+}
+
+// addObjectID checks if a groupModel has a value assigned for Id, if no value a new one is generated and assigned
+func (g *groupModel) addObjectID() {
+	if g.Id.Hex() == "" {
+		g.Id = primitive.NewObjectID()
+	}
+}
+
+// postProcess updates an groupModel struct postProcess
+func (g *groupModel) postProcess() (err error) {
+	if g.Name == "" {
+		err = errors.New("group record does not have a name")
+	}
+	// TODO - When implementing soft delete, DeletedAt can be checked here to ensure deleted groups are filtered out
+	return
 }
 
 // toDoc converts the bson group model into a bson.D

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"time"
@@ -33,6 +34,21 @@ func (b *blacklistModel) addTimeStamps(newRecord bool) {
 	if newRecord {
 		b.CreatedAt = currentTime
 	}
+}
+
+// addObjectID checks if a blacklistModel has a value assigned for Id, if no value a new one is generated and assigned
+func (b *blacklistModel) addObjectID() {
+	if b.Id.Hex() == "" {
+		b.Id = primitive.NewObjectID()
+	}
+}
+
+// postProcess updates an blacklistModel struct postProcess to do things such as removing the password field's value
+func (b *blacklistModel) postProcess() (err error) {
+	if b.AuthToken == "" {
+		err = errors.New("blacklist record does not have an AuthToken")
+	}
+	return
 }
 
 // toDoc converts the bson blacklistModel into a bson.D

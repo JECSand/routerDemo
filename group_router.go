@@ -8,15 +8,16 @@ import (
 )
 
 type groupRouter struct {
+	aService AuthService
 	gService GroupService
 }
 
 // NewGroupRouter is a function that initializes a new groupRouter struct
-func NewGroupRouter(router *mux.Router, g GroupService, db *DBClient) *mux.Router {
-	gRouter := groupRouter{g}
+func NewGroupRouter(router *mux.Router, a AuthService, g GroupService) *mux.Router {
+	gRouter := groupRouter{a, g}
 	router.HandleFunc("/groups", HandleOptionsRequest).Methods("OPTIONS")
-	router.HandleFunc("/groups", AdminTokenVerifyMiddleWare(gRouter.GroupsShow, db)).Methods("GET")
-	router.HandleFunc("/groups", AdminTokenVerifyMiddleWare(gRouter.CreateGroup, db)).Methods("POST")
+	router.HandleFunc("/groups", a.AdminTokenVerifyMiddleWare(gRouter.GroupsShow)).Methods("GET")
+	router.HandleFunc("/groups", a.AdminTokenVerifyMiddleWare(gRouter.CreateGroup)).Methods("POST")
 	return router
 }
 

@@ -18,6 +18,11 @@ type User struct {
 	DeletedAt    time.Time `json:"deleted_at,omitempty"`
 }
 
+// Validate ...
+func (g *User) Validate() (err error) {
+	return
+}
+
 // BuildUpdate is a function that setups the base user struct during a user modification request
 func (g *User) BuildUpdate(curUser *userModel) {
 	if len(g.Username) == 0 {

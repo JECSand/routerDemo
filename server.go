@@ -11,16 +11,17 @@ import (
 // Server is a struct that stores the API Apps high level attributes such as the router, config, and services
 type Server struct {
 	Router       *mux.Router
+	AuthService  AuthService
 	UserService  UserService
 	GroupService GroupService
 }
 
 // NewServer is a function used to initialize a new Server struct
-func NewServer(u UserService, g GroupService, db *DBClient) *Server {
+func NewServer(u UserService, g GroupService, aService AuthService) *Server {
 	router := mux.NewRouter().StrictSlash(true)
-	router = NewGroupRouter(router, g, db)
-	router = NewUserRouter(router, u, g, db)
-	s := Server{Router: router, UserService: u, GroupService: g}
+	router = NewGroupRouter(router, aService, g)
+	router = NewUserRouter(router, aService, u, g)
+	s := Server{Router: router, AuthService: aService, UserService: u, GroupService: g}
 	return &s
 }
 

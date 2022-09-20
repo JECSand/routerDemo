@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/crypto/bcrypt"
@@ -14,12 +15,13 @@ import (
 type userService struct {
 	collection *mongo.Collection
 	db         *DBClient
+	handler    *DBHandler[*userModel]
 }
 
-// NewUserService is an exported function used to initialize a new UserService struct
-func NewUserService(db *DBClient) *userService {
+// newUserService is an exported function used to initialize a new UserService struct
+func newUserService(db *DBClient, handler *DBHandler[*userModel]) *userService {
 	collection := db.client.Database(os.Getenv("DATABASE")).Collection("users")
-	return &userService{collection, db}
+	return &userService{collection, db, handler}
 }
 
 // AuthenticateUser is used to authenticate users that are signing in
@@ -216,25 +218,16 @@ func (p *userService) UsersFind(u *User) ([]*User, error) {
 
 // UserFind is used to find a specific user doc
 func (p *userService) UserFind(u *User) (*User, error) {
-	user, err := newUserModel(&User{})
-	if err != nil {
-		return u, err
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
 	um, err := newUserModel(u)
 	if err != nil {
 		return u, err
 	}
-	findFilter := bson.M{"_id": um.Id}
-	if u.GroupId != "" {
-		findFilter = bson.M{"_id": um.Id, "group_id": um.GroupId}
-	}
-	err = p.collection.FindOne(ctx, findFilter).Decode(&user)
+	dm, err := p.handler.FindOne(um)
 	if err != nil {
+		fmt.Println("CHECK USER ERROR: ", err.Error())
 		return &User{}, err
 	}
-	return user.toRoot(), nil
+	return dm.toRoot(), nil
 }
 
 // UserUpdate is used to update an existing user doc
@@ -280,7 +273,7 @@ func (p *userService) UserUpdate(u *User) (*User, error) {
 	if docCount == 0 {
 		return &User{}, errors.New("no users found")
 	}
-	filter := bson.D{{"_id", um.Id}}
+	// filter := bson.D{{"_id", um.Id}}
 	um, err = newUserModel(u)
 	if err != nil {
 		return u, err
@@ -292,14 +285,8 @@ func (p *userService) UserUpdate(u *User) (*User, error) {
 		if err != nil {
 			return &User{}, err
 		}
-		err = p.db.UpdateOne(filter, um, "users")
-		if err != nil {
-			return &User{}, err
-		}
-		um.Password = ""
-		return um.toRoot(), nil
 	}
-	err = p.db.UpdateOne(filter, um, "users")
+	um, err = p.handler.UpdateOne(um)
 	if err != nil {
 		return &User{}, err
 	}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"time"
@@ -52,6 +53,23 @@ func (u *userModel) addTimeStamps(newRecord bool) {
 	if newRecord {
 		u.CreatedAt = currentTime
 	}
+}
+
+// addObjectID checks if a userModel has a value assigned for Id, if no value a new one is generated and assigned
+func (u *userModel) addObjectID() {
+	if u.Id.Hex() == "" {
+		u.Id = primitive.NewObjectID()
+	}
+}
+
+// postProcess updates an userModel struct postProcess to do things such as removing the password field's value
+func (u *userModel) postProcess() (err error) {
+	u.Password = ""
+	if u.Email == "" {
+		err = errors.New("user record does not have an email")
+	}
+	// TODO - When implementing soft delete, DeletedAt can be checked here to ensure deleted users are filtered out
+	return
 }
 
 // toDoc converts the bson userModel into a bson.D

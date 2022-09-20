@@ -13,12 +13,13 @@ import (
 type groupService struct {
 	collection *mongo.Collection
 	db         *DBClient
+	handler    *DBHandler[*groupModel]
 }
 
-// NewGroupService is an exported function used to initialize a new GroupService struct
-func NewGroupService(db *DBClient) *groupService {
+// newGroupService is an exported function used to initialize a new GroupService struct
+func newGroupService(db *DBClient, handler *DBHandler[*groupModel]) *groupService {
 	collection := db.client.Database(os.Getenv("DATABASE")).Collection("groups")
-	return &groupService{collection, db}
+	return &groupService{collection, db, handler}
 }
 
 // GroupCreate is used to create a new user group

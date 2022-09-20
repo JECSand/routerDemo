@@ -32,8 +32,12 @@ func (a *App) Initialize() error {
 		return err
 	}
 	// 3) Initial DB Services
-	gService := NewGroupService(a.client)
-	uService := NewUserService(a.client)
+	gHandler := a.client.NewGroupHandler()
+	uHandler := a.client.NewUserHandler()
+	blHandler := a.client.NewBlacklistHandler()
+	gService := newGroupService(a.client, gHandler)
+	uService := newUserService(a.client, uHandler)
+	aService := newAuthService(a.client, blHandler, uService, gService)
 	// 4) Create RootAdmin user if database is empty
 	var group Group
 	var adminUser User
@@ -63,7 +67,7 @@ func (a *App) Initialize() error {
 		}
 	}
 	// 5) Initialize Server
-	a.server = NewServer(uService, gService, a.client)
+	a.server = NewServer(uService, gService, aService)
 	return nil
 }
 

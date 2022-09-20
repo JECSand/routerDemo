@@ -10,30 +10,31 @@ import (
 )
 
 type userRouter struct {
+	aService AuthService
 	uService UserService
 	gService GroupService
 }
 
 // NewUserRouter is a function that initializes a new userRouter struct
-func NewUserRouter(router *mux.Router, u UserService, g GroupService, client *DBClient) *mux.Router {
-	uRouter := userRouter{u, g}
+func NewUserRouter(router *mux.Router, a AuthService, u UserService, g GroupService) *mux.Router {
+	uRouter := userRouter{a, u, g}
 	router.HandleFunc("/auth", HandleOptionsRequest).Methods("OPTIONS")
 	router.HandleFunc("/auth", uRouter.Signin).Methods("POST")
-	router.HandleFunc("/auth", MemberTokenVerifyMiddleWare(uRouter.RefreshSession, client)).Methods("GET")
-	router.HandleFunc("/auth", MemberTokenVerifyMiddleWare(uRouter.Signout, client)).Methods("DELETE")
+	router.HandleFunc("/auth", a.MemberTokenVerifyMiddleWare(uRouter.RefreshSession)).Methods("GET")
+	router.HandleFunc("/auth", a.MemberTokenVerifyMiddleWare(uRouter.Signout)).Methods("DELETE")
 	router.HandleFunc("/auth/register", HandleOptionsRequest).Methods("OPTIONS")
 	router.HandleFunc("/auth/register", uRouter.RegisterUser).Methods("POST")
 	router.HandleFunc("/auth/api-key", HandleOptionsRequest).Methods("OPTIONS")
-	router.HandleFunc("/auth/api-key", MemberTokenVerifyMiddleWare(uRouter.GenerateAPIKey, client)).Methods("GET")
+	router.HandleFunc("/auth/api-key", a.MemberTokenVerifyMiddleWare(uRouter.GenerateAPIKey)).Methods("GET")
 	router.HandleFunc("/auth/password", HandleOptionsRequest).Methods("OPTIONS")
-	router.HandleFunc("/auth/password", MemberTokenVerifyMiddleWare(uRouter.UpdatePassword, client)).Methods("POST")
+	router.HandleFunc("/auth/password", a.MemberTokenVerifyMiddleWare(uRouter.UpdatePassword)).Methods("POST")
 	router.HandleFunc("/users", HandleOptionsRequest).Methods("OPTIONS")
-	router.HandleFunc("/users", MemberTokenVerifyMiddleWare(uRouter.UsersShow, client)).Methods("GET")
+	router.HandleFunc("/users", a.MemberTokenVerifyMiddleWare(uRouter.UsersShow)).Methods("GET")
 	router.HandleFunc("/users/{userId}", HandleOptionsRequest).Methods("OPTIONS")
-	router.HandleFunc("/users/{userId}", MemberTokenVerifyMiddleWare(uRouter.UserShow, client)).Methods("GET")
-	router.HandleFunc("/users", AdminTokenVerifyMiddleWare(uRouter.CreateUser, client)).Methods("POST")
-	router.HandleFunc("/users/{userId}", AdminTokenVerifyMiddleWare(uRouter.DeleteUser, client)).Methods("DELETE")
-	router.HandleFunc("/users/{userId}", MemberTokenVerifyMiddleWare(uRouter.ModifyUser, client)).Methods("PATCH")
+	router.HandleFunc("/users/{userId}", a.MemberTokenVerifyMiddleWare(uRouter.UserShow)).Methods("GET")
+	router.HandleFunc("/users", a.AdminTokenVerifyMiddleWare(uRouter.CreateUser)).Methods("POST")
+	router.HandleFunc("/users/{userId}", a.AdminTokenVerifyMiddleWare(uRouter.DeleteUser)).Methods("DELETE")
+	router.HandleFunc("/users/{userId}", a.MemberTokenVerifyMiddleWare(uRouter.ModifyUser)).Methods("PATCH")
 	return router
 }
 

@@ -12,6 +12,11 @@ type Group struct {
 	DeletedAt    time.Time `json:"deleted_at,omitempty"`
 }
 
+// Validate ...
+func (g *Group) Validate() (err error) {
+	return
+}
+
 // GroupService is an interface used to manage the relevant group doc controllers
 type GroupService interface {
 	GroupCreate(g *Group) (*Group, error)

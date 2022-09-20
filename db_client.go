@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -16,6 +15,14 @@ type dbModel interface {
 	bsonFilter() (doc bson.D, err error)
 	bsonUpdate() (doc bson.D, err error)
 	addTimeStamps(newRecord bool)
+	addObjectID()
+	postProcess() (err error)
+}
+
+// DBHandler is a Generic type struct for organizing dbModel methods
+type DBHandler[T dbModel] struct {
+	db         *DBClient
+	collection *mongo.Collection
 }
 
 // DBClient manages a database connection
@@ -48,74 +55,132 @@ func (db *DBClient) Close() error {
 	return err
 }
 
-// findOne mongodb doc
-func (db *DBClient) findOne(filter bson.D, collectionName string, dataModel interface{}) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	err := db.client.Database(os.Getenv("DATABASE")).Collection(collectionName).FindOne(ctx, filter).Decode(dataModel)
-	if err != nil {
-		return errors.New(collectionName + " not found")
+// NewDBHandler returns a new DBHandler generic interface
+func (db *DBClient) NewDBHandler(collectionName string) *DBHandler[dbModel] {
+	col := db.client.Database(os.Getenv("DATABASE")).Collection(collectionName)
+	return &DBHandler[dbModel]{
+		db:         db,
+		collection: col,
 	}
-	return nil
 }
 
-// updateOne is used to update a single mongodb doc
-func (db *DBClient) updateOne(filter bson.D, update bson.D, collectionName string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	_, err := db.client.Database(os.Getenv("DATABASE")).Collection(collectionName).UpdateOne(ctx, filter, update)
-	if err != nil {
-		return err
+// NewUserHandler returns a new DBHandler users interface
+func (db *DBClient) NewUserHandler() *DBHandler[*userModel] {
+	col := db.client.Database(os.Getenv("DATABASE")).Collection("users")
+	return &DBHandler[*userModel]{
+		db:         db,
+		collection: col,
 	}
-	return nil
 }
 
-// UpdateOne Function to get a user from datasource with custom filter
-func (db *DBClient) UpdateOne(filter bson.D, m dbModel, collectionName string) error {
+// NewGroupHandler returns a new DBHandler groups interface
+func (db *DBClient) NewGroupHandler() *DBHandler[*groupModel] {
+	col := db.client.Database(os.Getenv("DATABASE")).Collection("groups")
+	return &DBHandler[*groupModel]{
+		db:         db,
+		collection: col,
+	}
+}
+
+// NewBlacklistHandler returns a new DBHandler blacklist interface
+func (db *DBClient) NewBlacklistHandler() *DBHandler[*blacklistModel] {
+	col := db.client.Database(os.Getenv("DATABASE")).Collection("blacklists")
+	return &DBHandler[*blacklistModel]{
+		db:         db,
+		collection: col,
+	}
+}
+
+// FindOne is used to get a dbModel from the db with custom filter
+func (h *DBHandler[T]) FindOne(filter T) (T, error) {
+	var m T
+	f, err := filter.bsonFilter()
+	if err != nil {
+		return filter, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	err = h.collection.FindOne(ctx, f).Decode(&m)
+	if err != nil {
+		return filter, err
+	}
+	if err != nil {
+		return filter, err
+	}
+	err = m.postProcess()
+	return m, err
+}
+
+// FindMany is used to get a slice of dbModels from the db with custom filter
+func (h *DBHandler[T]) FindMany(filter T) ([]T, error) {
+	var m []T
+	f, err := filter.bsonFilter()
+	if err != nil {
+		return m, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cursor, err := h.collection.Find(ctx, f)
+	if err != nil {
+		return m, err
+	}
+	defer cursor.Close(ctx)
+	for cursor.Next(ctx) {
+		var md T
+		cursor.Decode(&md)
+		err = md.postProcess()
+		if err != nil {
+			return m, err
+		}
+		m = append(m, md)
+	}
+	return m, nil
+}
+
+// UpdateOne Function to update a dbModel from datasource with custom filter and update model
+func (h *DBHandler[T]) UpdateOne(m T) (T, error) {
+	f, err := m.bsonFilter()
+	if err != nil {
+		return m, err
+	}
 	m.addTimeStamps(false)
 	update, err := m.bsonUpdate()
 	if err != nil {
-		return err
+		return m, err
 	}
-	err = db.updateOne(filter, update, collectionName)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	_, err = h.collection.UpdateOne(ctx, f, update)
 	if err != nil {
-		return err
+		return m, err
 	}
-	return err
+	err = m.postProcess()
+	return m, err
 }
 
-// FindOneUser Function to get a user from datasource with custom filter
-func (db *DBClient) FindOneUser(user *User) (*User, error) {
-	um, err := newUserModel(user)
+// InsertOne adds a new dbModel record to a collection
+func (h *DBHandler[T]) InsertOne(m T) (T, error) {
+	m.addTimeStamps(true)
+	m.addObjectID()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	_, err := h.collection.InsertOne(ctx, m)
 	if err != nil {
-		return user, err
+		return m, err
 	}
-	filter, err := um.bsonFilter()
-	if err != nil {
-		return user, err
-	}
-	model, err := newUserModel(&User{})
-	if err != nil {
-		return &User{}, err
-	}
-	err = db.findOne(filter, "users", &model)
-	return model.toRoot(), err
+	err = m.postProcess()
+	return m, err
 }
 
-// FindOneGroup Function to get a user from datasource with custom filter
-func (db *DBClient) FindOneGroup(group *Group) (*Group, error) {
-	gm, err := newGroupModel(group)
+// DeleteOne adds a new dbModel record to a collection
+func (h *DBHandler[T]) DeleteOne(filter T) (T, error) { //TODO: to be replaced with "soft delete"
+	var m T
+	f, err := filter.bsonFilter()
 	if err != nil {
-		return group, err
+		return m, err
 	}
-	filter, err := gm.bsonFilter()
-	if err != nil {
-		return group, err
-	}
-	model, err := newGroupModel(&Group{})
-	if err != nil {
-		return &Group{}, err
-	}
-	err = db.findOne(filter, "groups", &model)
-	return model.toRoot(), err
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	err = h.collection.FindOneAndDelete(ctx, f).Decode(&m)
+	return m, err
 }
