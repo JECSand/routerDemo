@@ -36,7 +36,7 @@ func (a *App) Initialize() error {
 	uHandler := a.client.NewUserHandler()
 	blHandler := a.client.NewBlacklistHandler()
 	gService := newGroupService(a.client, gHandler)
-	uService := newUserService(a.client, uHandler)
+	uService := newUserService(a.client, uHandler, gHandler)
 	aService := newAuthService(a.client, blHandler, uService, gService)
 	// 4) Create RootAdmin user if database is empty
 	var group Group

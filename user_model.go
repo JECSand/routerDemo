@@ -57,7 +57,7 @@ func (u *userModel) addTimeStamps(newRecord bool) {
 
 // addObjectID checks if a userModel has a value assigned for Id, if no value a new one is generated and assigned
 func (u *userModel) addObjectID() {
-	if u.Id.Hex() == "" {
+	if u.Id.Hex() == "" || u.Id.Hex() == "000000000000000000000000" {
 		u.Id = primitive.NewObjectID()
 	}
 }
@@ -84,9 +84,9 @@ func (u *userModel) toDoc() (doc bson.D, err error) {
 
 // bsonFilter generates a bson filter for MongoDB queries from the userModel data
 func (u *userModel) bsonFilter() (doc bson.D, err error) {
-	if u.Id.Hex() != "" {
+	if u.Id.Hex() != "" && u.Id.Hex() != "000000000000000000000000" {
 		doc = bson.D{{"_id", u.Id}}
-	} else if u.GroupId.Hex() != "" {
+	} else if u.GroupId.Hex() != "" && u.GroupId.Hex() != "000000000000000000000000" {
 		doc = bson.D{{"group_id", u.GroupId}}
 	} else if u.Email != "" {
 		doc = bson.D{{"email", u.Email}}

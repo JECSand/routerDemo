@@ -48,8 +48,6 @@ func (g *User) BuildUpdate(curUser *userModel) {
 // UserService is an interface used to manage the relevant user doc controllers
 type UserService interface {
 	AuthenticateUser(u *User) (*User, error)
-	BlacklistAuthToken(authToken string) error
-	RefreshToken(tokenData *TokenData) (*User, error)
 	UpdatePassword(tokenData *TokenData, CurrentPassword string, newPassword string) (*User, error)
 	UserCreate(u *User) (*User, error)
 	UserDelete(u *User) (*User, error)

@@ -38,7 +38,7 @@ func (b *blacklistModel) addTimeStamps(newRecord bool) {
 
 // addObjectID checks if a blacklistModel has a value assigned for Id, if no value a new one is generated and assigned
 func (b *blacklistModel) addObjectID() {
-	if b.Id.Hex() == "" {
+	if b.Id.Hex() == "" || b.Id.Hex() == "000000000000000000000000" {
 		b.Id = primitive.NewObjectID()
 	}
 }
@@ -63,7 +63,7 @@ func (b *blacklistModel) toDoc() (doc bson.D, err error) {
 
 // bsonFilter generates a bson filter for MongoDB queries from the blacklistModel data
 func (b *blacklistModel) bsonFilter() (doc bson.D, err error) {
-	if b.Id.Hex() != "" {
+	if b.Id.Hex() != "" && b.Id.Hex() != "000000000000000000000000" {
 		doc = bson.D{{"_id", b.Id}}
 	}
 	return

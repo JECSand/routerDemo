@@ -1,12 +1,9 @@
 package main
 
 import (
-	"context"
-	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"net/http"
 	"os"
-	"time"
 )
 
 // authService is used by the app to manage db auth functionality
@@ -24,14 +21,19 @@ func newAuthService(db *DBClient, handler *DBHandler[*blacklistModel], uService 
 	return &authService{uService, gService, collection, db, handler}
 }
 
+// BlacklistAuthToken is used during sign-out to add the now invalid auth-token/api key to the blacklist collection
+func (a *authService) BlacklistAuthToken(authToken string) error {
+	_, err := a.handler.InsertOne(&blacklistModel{AuthToken: authToken})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // checkTokenBlacklist to determine if the submitted Auth-Token or API-Key with what's in the blacklist collection
 func (a *authService) checkTokenBlacklist(authToken string) bool {
-	var checkToken Blacklist
-	collection := a.db.client.Database(os.Getenv("DATABASE")).Collection("blacklists")
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	blacklistErr := collection.FindOne(ctx, bson.M{"auth_token": authToken}).Decode(&checkToken)
-	if blacklistErr != nil {
+	_, err := a.handler.FindOne(&blacklistModel{AuthToken: authToken})
+	if err != nil {
 		return false
 	}
 	return true

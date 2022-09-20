@@ -104,11 +104,7 @@ func (h *DBHandler[T]) FindOne(filter T) (T, error) {
 	if err != nil {
 		return filter, err
 	}
-	if err != nil {
-		return filter, err
-	}
-	err = m.postProcess()
-	return m, err
+	return m, nil
 }
 
 // FindMany is used to get a slice of dbModels from the db with custom filter
@@ -120,7 +116,12 @@ func (h *DBHandler[T]) FindMany(filter T) ([]T, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	cursor, err := h.collection.Find(ctx, f)
+	var cursor *mongo.Cursor
+	if len(f) > 0 {
+		cursor, err = h.collection.Find(ctx, f)
+	} else {
+		cursor, err = h.collection.Find(ctx, bson.M{})
+	}
 	if err != nil {
 		return m, err
 	}

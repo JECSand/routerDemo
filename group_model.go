@@ -43,7 +43,7 @@ func (g *groupModel) addTimeStamps(newRecord bool) {
 
 // addObjectID checks if a groupModel has a value assigned for Id, if no value a new one is generated and assigned
 func (g *groupModel) addObjectID() {
-	if g.Id.Hex() == "" {
+	if g.Id.Hex() == "" || g.Id.Hex() == "000000000000000000000000" {
 		g.Id = primitive.NewObjectID()
 	}
 }
@@ -69,7 +69,7 @@ func (g *groupModel) toDoc() (doc bson.D, err error) {
 
 // bsonFilter generates a bson filter for MongoDB queries from the groupModel data
 func (g *groupModel) bsonFilter() (doc bson.D, err error) {
-	if g.Id.Hex() != "" {
+	if g.Id.Hex() != "" && g.Id.Hex() != "000000000000000000000000" {
 		doc = bson.D{{"_id", g.Id}}
 	}
 	return

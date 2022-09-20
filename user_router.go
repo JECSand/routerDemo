@@ -164,7 +164,7 @@ func (ur *userRouter) RefreshSession(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	user, err := ur.uService.RefreshToken(tokenData)
+	user, err := ur.uService.UserFind(tokenData.toUser())
 	if err != nil {
 		return
 	}
@@ -184,7 +184,7 @@ func (ur *userRouter) GenerateAPIKey(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	user, err := ur.uService.RefreshToken(tokenData)
+	user, err := ur.uService.UserFind(tokenData.toUser())
 	expDT := time.Now().Add(time.Hour * 4380).Unix()
 	apiKey, err := CreateToken(user, expDT)
 	if err != nil {
@@ -198,7 +198,10 @@ func (ur *userRouter) GenerateAPIKey(w http.ResponseWriter, r *http.Request) {
 // Signout is the handler function that ends a users session
 func (ur *userRouter) Signout(w http.ResponseWriter, r *http.Request) {
 	authToken := r.Header.Get("Auth-Token")
-	ur.uService.BlacklistAuthToken(authToken)
+	err := ur.aService.BlacklistAuthToken(authToken)
+	if err != nil {
+		return
+	}
 	w = SetResponseHeaders(w, "", "")
 	w.WriteHeader(http.StatusOK)
 	return
@@ -318,10 +321,10 @@ func (ur *userRouter) UsersShow(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	groupUuid := AdminRouteRoleCheck(decodedToken)
+	groupId := AdminRouteRoleCheck(decodedToken)
 	w = SetResponseHeaders(w, "", "")
 	w.WriteHeader(http.StatusOK)
-	users, err := ur.uService.UsersFind(&User{GroupId: groupUuid})
+	users, err := ur.uService.UsersFind(&User{GroupId: groupId})
 	if err := json.NewEncoder(w).Encode(users); err != nil {
 		return
 	}
