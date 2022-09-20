@@ -37,7 +37,6 @@ func (gr *groupRouter) GroupsShow(w http.ResponseWriter, r *http.Request) {
 // CreateGroup from a REST Request post body
 func (gr *groupRouter) CreateGroup(w http.ResponseWriter, r *http.Request) {
 	var group Group
-	group.RootAdmin = false
 	body, err := io.ReadAll(io.LimitReader(r.Body, 1048576))
 	if err != nil {
 		return
@@ -54,6 +53,7 @@ func (gr *groupRouter) CreateGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	group.Id = generateObjectID()
+	group.RootAdmin = false
 	g, err := gr.gService.GroupCreate(&group)
 	if err != nil {
 		w = SetResponseHeaders(w, "", "")
