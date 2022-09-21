@@ -45,6 +45,16 @@ func (b *blacklistModel) update(doc interface{}) (err error) {
 	return
 }
 
+// bsonLoad loads a bson doc into the blacklistModel
+func (b *blacklistModel) bsonLoad(doc bson.D) (err error) {
+	bData, err := bsonMarshall(doc)
+	if err != nil {
+		return err
+	}
+	err = bson.Unmarshal(bData, b)
+	return err
+}
+
 // match compares an input bson doc and returns whether there's a match with the blacklistModel
 func (b *blacklistModel) match(doc interface{}) bool {
 	data, err := bsonMarshall(doc)

@@ -79,6 +79,16 @@ func (u *userModel) update(doc interface{}) (err error) {
 	return
 }
 
+// bsonLoad loads a bson doc into the userModel
+func (u *userModel) bsonLoad(doc bson.D) (err error) {
+	bData, err := bsonMarshall(doc)
+	if err != nil {
+		return err
+	}
+	err = bson.Unmarshal(bData, u)
+	return err
+}
+
 // match compares an input bson doc and returns whether there's a match with the userModel
 // TODO: Find a better way to write these model match methods
 func (u *userModel) match(doc interface{}) bool {

@@ -11,93 +11,12 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/readpref"
 	"go.mongodb.org/mongo-driver/x/bsonx"
 	"os"
+	"routerDemo/models"
 	"time"
 )
 
 /*
-================ testCursorData ==================
-*/
-
-// testCursorData
-type testCursorData struct {
-	Results []dbModel `bson:"results,omitempty"`
-}
-
-// initTestCursorData instantiates a new testCursorData
-func initTestCursorData(res []dbModel) *testCursorData {
-	return &testCursorData{Results: res}
-}
-
-// toDoc converts the bson testCursorData into a bson.D
-func (b *testCursorData) toDoc() (doc bson.D, err error) {
-	data, err := bson.Marshal(b)
-	if err != nil {
-		return
-	}
-	err = bson.Unmarshal(data, &doc)
-	return
-}
-
-/*
-================ testMongoCursor ==================
-*/
-
-// testMongoCollection
-type testMongoCursor struct {
-	ctx      context.Context
-	Results  []byte
-	docs     []dbModel
-	curCurse int
-}
-
-// newTestMongoCursor initiates and returns a testMongoCursor
-func newTestMongoCursor(cur *mongo.Cursor) *testMongoCursor {
-	var cd testCursorData
-	data, err := bsonMarshall(cur.Current)
-	if err != nil {
-		panic(err)
-	}
-	err = bson.Unmarshal(data, &cd)
-	if err != nil {
-		panic(err)
-	}
-	return &testMongoCursor{Results: cur.Current, docs: cd.Results, curCurse: 0}
-}
-
-// Next check if there's more result documents to decode
-func (c *testMongoCursor) Next(ctx context.Context) bool {
-	c.ctx = ctx
-	if c.curCurse < len(c.docs) {
-		return true
-	}
-	return false
-}
-
-// Decode a result document into the input val
-func (c *testMongoCursor) Decode(val interface{}) error {
-	if c.curCurse >= len(c.docs) {
-		return errors.New("test cursor out of range")
-	}
-	curDoc := c.docs[c.curCurse]
-	val = curDoc
-	c.curCurse++
-	return nil
-}
-
-// Close the test cursor
-func (c *testMongoCursor) Close(ctx context.Context) error {
-	c.ctx = ctx
-	return nil
-}
-
-/*
-================ testMongoCollection ==================
-Extra methods can be added to the DBCollection interface from:
-	https://github.com/mongodb/mongo-go-driver/blob/master/mongo/collection.go
-as needed
-See
-	https://github.com/mongodb/mongo-go-driver/blob/947cf7eb5052024ab6c4ef3593d2cfb68f19e89c/x/bsonx/document.go#L48
-To expand bson.Doc functionality
+================ testDBUtils ==================
 */
 
 // standardizeID ensures that a dbModels unique identified is returned as a string
@@ -131,9 +50,196 @@ func bsonMarshall(bsonData interface{}) (data []byte, err error) {
 		if err != nil {
 			return
 		}
+	case bson.Raw:
+		data, err = bson.Marshal(t)
+		if err != nil {
+			return
+		}
 	}
 	return
 }
+
+// bsonUnmarshall inputs a bson type and attempts to marshall it into a slice of bytes
+func bsonUnmarshall(colName string, bsonData interface{}) (data dbModel, err error) {
+	switch colName {
+	case "users":
+		bData, err := bsonMarshall(bsonData)
+		if err != nil {
+			return nil, err
+		}
+		um := userModel{}
+		err = bson.Unmarshal(bData, &um)
+		return &um, nil
+	case "groups":
+		bData, err := bsonMarshall(bsonData)
+		if err != nil {
+			return nil, err
+		}
+		gm := groupModel{}
+		err = bson.Unmarshal(bData, &gm)
+		return &gm, nil
+	case "blacklists":
+		bData, err := bsonMarshall(bsonData)
+		if err != nil {
+			return nil, err
+		}
+		bm := blacklistModel{}
+		err = bson.Unmarshal(bData, &bm)
+		return &bm, nil
+	}
+	return nil, errors.New("invalid test collection type")
+}
+
+/*
+================ testGroupsUtils ==================
+*/
+
+func getTestGroupModels(root bool) []*groupModel {
+	var gms []*groupModel
+	var gm *groupModel
+	if root {
+		gm, _ = newGroupModel(&models.Group{Id: "000000000000000000000001", Name: "test1", RootAdmin: true})
+		gms = append(gms, gm)
+	}
+	gm, _ = newGroupModel(&models.Group{Id: "000000000000000000000002", Name: "test2", RootAdmin: false})
+	gms = append(gms, gm)
+	gm, _ = newGroupModel(&models.Group{Id: "000000000000000000000003", Name: "test3", RootAdmin: false})
+	gms = append(gms, gm)
+	return gms
+}
+
+func initTestGroupService() *GroupService {
+	os.Setenv("ENV", "test")
+	db, _ := initializeNewTestClient()
+	collection := db.GetCollection("groups")
+	gHandler := db.NewGroupHandler()
+	return &GroupService{
+		collection,
+		db,
+		gHandler,
+	}
+}
+
+func setupTestFindGroups() *GroupService {
+	os.Setenv("ENV", "test")
+	db, _ := initializeNewTestClient()
+	collection := db.GetCollection("groups")
+	gHandler := db.NewGroupHandler()
+	gs := &GroupService{
+		collection,
+		db,
+		gHandler,
+	}
+	td := getTestGroupModels(false)
+	for _, d := range td {
+		_, err := gs.GroupCreate(d.toRoot())
+		if err != nil {
+			panic(err)
+		}
+	}
+	return gs
+}
+
+/*
+================ testCursorData ==================
+*/
+
+// testCursorData
+type testCursorData struct {
+	Results []bson.D `bson:"results,omitempty"`
+}
+
+// initTestCursorData instantiates a new testCursorData
+func initTestCursorData(res []dbModel) *testCursorData {
+	var resBSON []bson.D
+	for _, r := range res {
+		d, err := r.toDoc()
+		if err != nil {
+			panic(err)
+		}
+		resBSON = append(resBSON, d)
+	}
+	return &testCursorData{Results: resBSON}
+}
+
+// toDoc converts the bson testCursorData into a bson.D
+func (b *testCursorData) toDoc() (doc bson.D, err error) {
+	data, err := bson.Marshal(b)
+	if err != nil {
+		return
+	}
+	err = bson.Unmarshal(data, &doc)
+	return
+}
+
+/*
+================ testMongoCursor ==================
+*/
+
+// testMongoCollection
+type testMongoCursor struct {
+	ctx      context.Context
+	Results  []byte
+	docs     []bson.D
+	curCurse int
+}
+
+// newTestMongoCursor initiates and returns a testMongoCursor
+func newTestMongoCursor(cur *mongo.Cursor) *testMongoCursor {
+	var cd testCursorData
+	data, err := bsonMarshall(cur.Current)
+	if err != nil {
+		panic(err)
+	}
+	err = bson.Unmarshal(data, &cd)
+	if err != nil {
+		panic(err)
+	}
+	return &testMongoCursor{Results: cur.Current, docs: cd.Results, curCurse: 0}
+}
+
+// Next check if there's more result documents to decode
+func (c *testMongoCursor) Next(ctx context.Context) bool {
+	c.ctx = ctx
+	if c.curCurse < len(c.docs) {
+		return true
+	}
+	return false
+}
+
+// Decode a result document into the input val
+func (c *testMongoCursor) Decode(val interface{}) error {
+	if c.curCurse >= len(c.docs) {
+		return errors.New("test cursor out of range")
+	}
+	curDoc := c.docs[c.curCurse]
+	bData, err := bsonMarshall(curDoc)
+	if err != nil {
+		return err
+	}
+	err = bson.Unmarshal(bData, val)
+	if err != nil {
+		return err
+	}
+	c.curCurse++
+	return nil
+}
+
+// Close the test cursor
+func (c *testMongoCursor) Close(ctx context.Context) error {
+	c.ctx = ctx
+	return nil
+}
+
+/*
+================ testMongoCollection ==================
+Extra methods can be added to the DBCollection interface from:
+	https://github.com/mongodb/mongo-go-driver/blob/master/mongo/collection.go
+as needed
+See
+	https://github.com/mongodb/mongo-go-driver/blob/947cf7eb5052024ab6c4ef3593d2cfb68f19e89c/x/bsonx/document.go#L48
+To expand bson.Doc functionality
+*/
 
 // testMongoCollection
 type testMongoCollection struct {
@@ -153,33 +259,7 @@ func newTestMongoCollection(name string) (*testMongoCollection, error) {
 
 // unmarshallBSON converts a BSON byte type back into a dbModel
 func (coll *testMongoCollection) unmarshallBSON(bsonData interface{}) (dbModel, error) {
-	switch coll.name {
-	case "users":
-		data, err := bsonMarshall(bsonData)
-		if err != nil {
-			return nil, err
-		}
-		um := userModel{}
-		err = bson.Unmarshal(data, &um)
-		return &um, nil
-	case "groups":
-		data, err := bsonMarshall(bsonData)
-		if err != nil {
-			return nil, err
-		}
-		gm := groupModel{}
-		err = bson.Unmarshal(data, &gm)
-		return &gm, nil
-	case "blacklists":
-		data, err := bsonMarshall(bsonData)
-		if err != nil {
-			return nil, err
-		}
-		bm := blacklistModel{}
-		err = bson.Unmarshal(data, &bm)
-		return &bm, nil
-	}
-	return nil, errors.New("invalid collection type: " + coll.name)
+	return bsonUnmarshall(coll.name, bsonData)
 }
 
 // findById in the test collection a document by ID
@@ -258,13 +338,17 @@ func (coll *testMongoCollection) updateById(findId string, upDoc dbModel) (reDoc
 // find documents in the test collection
 func (coll *testMongoCollection) find(dbDoc dbModel) (reDocs []dbModel, err error) {
 	for _, doc := range coll.docs {
-		bsonData, bErr := dbDoc.toDoc()
-		if bErr != nil {
-			return reDocs, bErr
-		}
-		match := doc.match(bsonData)
-		if match {
-			reDocs = append(reDocs, dbDoc)
+		if dbDoc == nil {
+			reDocs = append(reDocs, doc)
+		} else {
+			bsonData, bErr := dbDoc.toDoc()
+			if bErr != nil {
+				return reDocs, bErr
+			}
+			match := doc.match(bsonData)
+			if match {
+				reDocs = append(reDocs, doc)
+			}
 		}
 	}
 	return reDocs, nil
@@ -478,6 +562,16 @@ func newTestMongoDatabase(databaseName string) (*testMongoDatabase, error) {
 		return &testMongoDatabase{}, err
 	}
 	testsColls = append(testsColls, testUserCollection)
+	testGroupCollection, err := newTestMongoCollection("groups")
+	if err != nil {
+		return &testMongoDatabase{}, err
+	}
+	testsColls = append(testsColls, testGroupCollection)
+	testBlacklistCollection, err := newTestMongoCollection("blacklists")
+	if err != nil {
+		return &testMongoDatabase{}, err
+	}
+	testsColls = append(testsColls, testBlacklistCollection)
 	return &testMongoDatabase{
 		name:            databaseName,
 		testCollections: testsColls,

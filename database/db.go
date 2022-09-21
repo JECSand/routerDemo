@@ -14,6 +14,7 @@ type dbModel interface {
 	toDoc() (doc bson.D, err error)
 	bsonFilter() (doc bson.D, err error)
 	bsonUpdate() (doc bson.D, err error)
+	bsonLoad(doc bson.D) (err error)
 	addTimeStamps(newRecord bool)
 	addObjectID()
 	postProcess() (err error)
