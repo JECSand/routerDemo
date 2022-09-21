@@ -129,7 +129,7 @@ func Test_decodeToken(t *testing.T) {
 				return
 			}
 			if !reflect.DeepEqual(got, tt.want) { // Asserting whether we get the correct wanted value
-				t.Errorf("InitUserToken() = %v, want %v", got, tt.want)
+				t.Errorf("DecodeJWT() = %v, want %v", got, tt.want)
 			}
 		})
 	}
