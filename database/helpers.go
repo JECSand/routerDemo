@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
@@ -14,30 +15,72 @@ import (
 )
 
 /*
+================ testCursorData ==================
+*/
+
+// testCursorData
+type testCursorData struct {
+	Results []dbModel `bson:"results,omitempty"`
+}
+
+// initTestCursorData instantiates a new testCursorData
+func initTestCursorData(res []dbModel) *testCursorData {
+	return &testCursorData{Results: res}
+}
+
+// toDoc converts the bson testCursorData into a bson.D
+func (b *testCursorData) toDoc() (doc bson.D, err error) {
+	data, err := bson.Marshal(b)
+	if err != nil {
+		return
+	}
+	err = bson.Unmarshal(data, &doc)
+	return
+}
+
+/*
 ================ testMongoCursor ==================
 */
 
 // testMongoCollection
 type testMongoCursor struct {
-	ctx     context.Context
-	Results []byte
+	ctx      context.Context
+	Results  []byte
+	docs     []dbModel
+	curCurse int
 }
 
 // newTestMongoCursor initiates and returns a testMongoCursor
 func newTestMongoCursor(cur *mongo.Cursor) *testMongoCursor {
-	return &testMongoCursor{Results: cur.Current}
+	var cd testCursorData
+	data, err := bsonMarshall(cur.Current)
+	if err != nil {
+		panic(err)
+	}
+	err = bson.Unmarshal(data, &cd)
+	if err != nil {
+		panic(err)
+	}
+	return &testMongoCursor{Results: cur.Current, docs: cd.Results, curCurse: 0}
 }
 
 // Next check if there's more result documents to decode
 func (c *testMongoCursor) Next(ctx context.Context) bool {
 	c.ctx = ctx
-	cont := false
-	return cont
+	if c.curCurse < len(c.docs) {
+		return true
+	}
+	return false
 }
 
 // Decode a result document into the input val
 func (c *testMongoCursor) Decode(val interface{}) error {
-	fmt.Println(val)
+	if c.curCurse >= len(c.docs) {
+		return errors.New("test cursor out of range")
+	}
+	curDoc := c.docs[c.curCurse]
+	val = curDoc
+	c.curCurse++
 	return nil
 }
 
@@ -57,10 +100,46 @@ See
 To expand bson.Doc functionality
 */
 
+// standardizeID ensures that a dbModels unique identified is returned as a string
+func standardizeID(dbDoc dbModel) (string, error) {
+	var docId string
+	switch t := dbDoc.getID().(type) {
+	case nil:
+		return docId, errors.New("a test record being inserted is missing a unique identifier")
+	case primitive.ObjectID:
+		docId = t.Hex()
+	case string:
+		docId = t
+	}
+	return docId, nil
+}
+
+// bsonMarshall inputs a bson type and attempts to marshall it into a slice of bytes
+func bsonMarshall(bsonData interface{}) (data []byte, err error) {
+	switch t := bsonData.(type) {
+	case nil:
+		return nil, errors.New("input bsonData to marshall can not be nil")
+	case []byte:
+		return t, nil
+	case bson.D:
+		data, err = bson.Marshal(t)
+		if err != nil {
+			return
+		}
+	case bson.M:
+		data, err = bson.Marshal(t)
+		if err != nil {
+			return
+		}
+	}
+	return
+}
+
 // testMongoCollection
 type testMongoCollection struct {
 	name string
 	ctx  context.Context
+	docs []dbModel
 }
 
 // newTestMongoCollection
@@ -68,19 +147,170 @@ func newTestMongoCollection(name string) (*testMongoCollection, error) {
 	if name == "" {
 		return &testMongoCollection{}, errors.New("invalid test collection name")
 	}
-	testUserCollection := &testMongoCollection{name: "users"}
+	testUserCollection := &testMongoCollection{name: name, docs: []dbModel{}}
 	return testUserCollection, nil
+}
+
+// unmarshallBSON converts a BSON byte type back into a dbModel
+func (coll *testMongoCollection) unmarshallBSON(bsonData interface{}) (dbModel, error) {
+	switch coll.name {
+	case "users":
+		data, err := bsonMarshall(bsonData)
+		if err != nil {
+			return nil, err
+		}
+		um := userModel{}
+		err = bson.Unmarshal(data, &um)
+		return &um, nil
+	case "groups":
+		data, err := bsonMarshall(bsonData)
+		if err != nil {
+			return nil, err
+		}
+		gm := groupModel{}
+		err = bson.Unmarshal(data, &gm)
+		return &gm, nil
+	case "blacklists":
+		data, err := bsonMarshall(bsonData)
+		if err != nil {
+			return nil, err
+		}
+		bm := blacklistModel{}
+		err = bson.Unmarshal(data, &bm)
+		return &bm, nil
+	}
+	return nil, errors.New("invalid collection type: " + coll.name)
+}
+
+// findById in the test collection a document by ID
+func (coll *testMongoCollection) findById(findId string) (reDoc dbModel, err error) {
+	for _, doc := range coll.docs {
+		var docId string
+		docId, err = standardizeID(doc)
+		if err != nil {
+			return
+		}
+		if docId == findId {
+			reDoc = doc
+			return
+		}
+	}
+	return reDoc, errors.New("document not found in test collection: " + findId)
+}
+
+// deleteById in the test collection a document by ID
+func (coll *testMongoCollection) deleteById(findId string) (reDoc dbModel, err error) {
+	var dbDocs []dbModel
+	del := false
+	for _, doc := range coll.docs {
+		var docId string
+		docId, err = standardizeID(doc)
+		if err != nil {
+			return
+		}
+		if docId != findId {
+			dbDocs = append(dbDocs, doc)
+		} else {
+			reDoc = doc
+			del = true
+		}
+	}
+	if !del {
+		return reDoc, errors.New("document not found in test collection: " + findId)
+	}
+	coll.docs = dbDocs
+	return reDoc, nil
+}
+
+// updateById a document in the test collection
+func (coll *testMongoCollection) updateById(findId string, upDoc dbModel) (reDoc dbModel, err error) {
+	var dbDocs []dbModel
+	up := false
+	for _, doc := range coll.docs {
+		var docId string
+		docId, err = standardizeID(doc)
+		if err != nil {
+			return
+		}
+		if docId != findId {
+			dbDocs = append(dbDocs, doc)
+		} else {
+			reDoc = doc
+			bsonData, bErr := upDoc.toDoc()
+			if bErr != nil {
+				return reDoc, bErr
+			}
+			err = reDoc.update(bsonData)
+			if err != nil {
+				return reDoc, err
+			}
+			up = true
+			dbDocs = append(dbDocs, reDoc)
+		}
+	}
+	if !up {
+		return reDoc, errors.New("document not found in test collection: " + findId)
+	}
+	coll.docs = dbDocs
+	return reDoc, nil
+}
+
+// find documents in the test collection
+func (coll *testMongoCollection) find(dbDoc dbModel) (reDocs []dbModel, err error) {
+	for _, doc := range coll.docs {
+		bsonData, bErr := dbDoc.toDoc()
+		if bErr != nil {
+			return reDocs, bErr
+		}
+		match := doc.match(bsonData)
+		if match {
+			reDocs = append(reDocs, dbDoc)
+		}
+	}
+	return reDocs, nil
+}
+
+// insert documents into test collection
+func (coll *testMongoCollection) insert(dbDocs []dbModel) (err error) {
+	var valDocs []dbModel
+	for _, dbDoc := range dbDocs {
+		var docId string
+		docId, err = standardizeID(dbDoc)
+		if err != nil {
+			return err
+		}
+		_, fErr := coll.findById(docId)
+		if fErr != nil {
+			valDocs = append(valDocs, dbDoc)
+		}
+	}
+	coll.docs = append(coll.docs, valDocs...)
+	return nil
+}
+
+// delete documents from the test collection
+func (coll *testMongoCollection) delete(dbDocs []dbModel) (reDocs []dbModel, err error) {
+	for _, dbDoc := range dbDocs {
+		var docId string
+		docId, err = standardizeID(dbDoc)
+		if err != nil {
+			return reDocs, err
+		}
+		reDoc, fErr := coll.deleteById(docId)
+		if fErr == nil {
+			reDocs = append(reDocs, reDoc)
+		}
+	}
+	return reDocs, nil
 }
 
 // InsertOne into test collection
 func (coll *testMongoCollection) InsertOne(ctx context.Context, document interface{}, opts ...*options.InsertOneOptions) (*mongo.InsertOneResult, error) {
-	testId := ""
 	coll.ctx = ctx
-	ioOpts := options.MergeInsertOneOptions(opts...)
-	imOpts := options.InsertMany()
-	fmt.Println(document, ioOpts, imOpts)
-	// TODO INSERT ONE
-	return &mongo.InsertOneResult{InsertedID: testId}, nil
+	fmt.Println(document, opts)
+	doc := document.(dbModel)
+	err := coll.insert([]dbModel{doc})
+	return &mongo.InsertOneResult{InsertedID: doc.getID()}, err
 }
 
 // InsertMany into test collection
@@ -90,9 +320,20 @@ func (coll *testMongoCollection) InsertMany(ctx context.Context, documents []int
 		return nil, mongo.ErrEmptySlice
 	}
 	fmt.Println(documents, opts)
-	// TODO INSERT MANY
-	imResult := &mongo.InsertManyResult{InsertedIDs: documents}
-	return imResult, mongo.BulkWriteException{}
+	var inDocs []dbModel
+	for _, d := range documents {
+		inDocs = append(inDocs, d.(dbModel))
+	}
+	err := coll.insert(inDocs)
+	if err != nil {
+		return nil, err
+	}
+	var inIds []interface{}
+	for _, inDoc := range inDocs {
+		inIds = append(inIds, inDoc.getID())
+	}
+	imResult := &mongo.InsertManyResult{InsertedIDs: inIds}
+	return imResult, err
 }
 
 // DeleteOne from test collection
@@ -100,7 +341,12 @@ func (coll *testMongoCollection) DeleteOne(ctx context.Context, filter interface
 	var delCount int64
 	coll.ctx = ctx
 	fmt.Println(filter, opts)
-	// TODO DELETE
+	filterDoc, err := coll.unmarshallBSON(filter)
+	if err != nil {
+		return nil, err
+	}
+	delDocs, err := coll.delete([]dbModel{filterDoc})
+	delCount = int64(len(delDocs))
 	return &mongo.DeleteResult{DeletedCount: delCount}, nil
 }
 
@@ -109,7 +355,16 @@ func (coll *testMongoCollection) FindOneAndDelete(ctx context.Context, filter in
 	var rawResult []byte
 	coll.ctx = ctx
 	fmt.Println(filter, opts)
-	// TODO FIND ONE AND DELETE
+	filterDoc, err := coll.unmarshallBSON(filter)
+	if err == nil {
+		delDocs, err := coll.delete([]dbModel{filterDoc})
+		if err != nil && len(delDocs) > 0 {
+			rawBson, err := delDocs[0].toDoc()
+			if err != nil {
+				rawResult, err = bsonMarshall(rawBson)
+			}
+		}
+	}
 	doc, err := bsonx.ReadDoc(rawResult)
 	res := mongo.NewSingleResultFromDocument(doc, err, nil)
 	return res
@@ -119,8 +374,20 @@ func (coll *testMongoCollection) FindOneAndDelete(ctx context.Context, filter in
 func (coll *testMongoCollection) UpdateOne(ctx context.Context, filter interface{}, update interface{}, opts ...*options.UpdateOptions) (*mongo.UpdateResult, error) {
 	coll.ctx = ctx
 	fmt.Println(filter, update, opts)
-	// TODO UPDATE ONE
-	return &mongo.UpdateResult{}, nil
+	filterDoc, err := coll.unmarshallBSON(filter)
+	if err == nil {
+		return nil, err
+	}
+	docId, err := standardizeID(filterDoc)
+	if err == nil {
+		return nil, err
+	}
+	updateDoc, err := coll.unmarshallBSON(update)
+	if err == nil {
+		return nil, err
+	}
+	reDoc, err := coll.updateById(docId, updateDoc)
+	return &mongo.UpdateResult{UpsertedID: reDoc.getID()}, err
 }
 
 // UpdateByID a document using an ID as the filter
@@ -129,7 +396,6 @@ func (coll *testMongoCollection) UpdateByID(ctx context.Context, id interface{},
 		return nil, mongo.ErrNilValue
 	}
 	fmt.Println(id, update, opts)
-	// TODO UPDATE BY ID
 	return coll.UpdateOne(ctx, bson.D{{"_id", id}}, update, opts...)
 }
 
@@ -138,7 +404,17 @@ func (coll *testMongoCollection) Find(ctx context.Context, filter interface{}, o
 	var rawResults []byte
 	coll.ctx = ctx
 	fmt.Println(filter, opts)
-	// TODO FIND
+	filterDoc, err := coll.unmarshallBSON(filter)
+	if err == nil {
+		return nil, err
+	}
+	reDocs, err := coll.find(filterDoc)
+	cd := initTestCursorData(reDocs)
+	bsonData, err := cd.toDoc()
+	if err != nil {
+		panic(err)
+	}
+	rawResults, err = bsonMarshall(bsonData)
 	cur = &mongo.Cursor{Current: rawResults}
 	return cur, nil
 }
@@ -148,7 +424,16 @@ func (coll *testMongoCollection) FindOne(ctx context.Context, filter interface{}
 	var rawResult []byte
 	coll.ctx = ctx
 	fmt.Println(filter, opts)
-	// TODO FIND ONE
+	filterDoc, err := coll.unmarshallBSON(filter)
+	if err == nil {
+		reDocs, err := coll.find(filterDoc)
+		if err != nil && len(reDocs) > 0 {
+			rawBson, err := reDocs[0].toDoc()
+			if err != nil {
+				rawResult, err = bsonMarshall(rawBson)
+			}
+		}
+	}
 	doc, err := bsonx.ReadDoc(rawResult)
 	res := mongo.NewSingleResultFromDocument(doc, err, nil)
 	return res
@@ -159,7 +444,15 @@ func (coll *testMongoCollection) CountDocuments(ctx context.Context, filter inte
 	var c int64
 	coll.ctx = ctx
 	fmt.Println(filter, opts)
-	// TODO COUNT
+	filterDoc, err := coll.unmarshallBSON(filter)
+	if err == nil {
+		return c, err
+	}
+	reDocs, err := coll.find(filterDoc)
+	if err != nil {
+		panic(err)
+	}
+	c = int64(len(reDocs))
 	return c, nil
 }
 

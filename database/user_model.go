@@ -38,13 +38,122 @@ func newUserModel(u *models.User) (um *userModel, err error) {
 		CreatedAt:    u.CreatedAt,
 		DeletedAt:    u.DeletedAt,
 	}
-	if u.Id != "" {
+	if u.Id != "" && u.Id != "000000000000000000000000" {
 		um.Id, err = primitive.ObjectIDFromHex(u.Id)
 	}
-	if u.GroupId != "" {
+	if u.GroupId != "" && u.GroupId != "000000000000000000000000" {
 		um.GroupId, err = primitive.ObjectIDFromHex(u.GroupId)
 	}
 	return
+}
+
+// update the userModel using an overwrite bson.D doc
+func (u *userModel) update(doc interface{}) (err error) {
+	data, err := bsonMarshall(doc)
+	if err != nil {
+		return
+	}
+	um := userModel{}
+	err = bson.Unmarshal(data, &um)
+	if len(um.Username) > 0 {
+		u.Username = um.Username
+	}
+	if len(um.FirstName) > 0 {
+		u.FirstName = um.FirstName
+	}
+	if len(um.LastName) > 0 {
+		u.LastName = um.LastName
+	}
+	if len(um.Email) > 0 {
+		u.Email = um.Email
+	}
+	if len(um.GroupId.Hex()) > 0 && um.GroupId.Hex() != "000000000000000000000000" {
+		u.GroupId = um.GroupId
+	}
+	if len(um.Role) > 0 {
+		u.Role = um.Role
+	}
+	if !um.LastModified.IsZero() {
+		u.LastModified = um.LastModified
+	}
+	return
+}
+
+// match compares an input bson doc and returns whether there's a match with the userModel
+// TODO: Find a better way to write these model match methods
+func (u *userModel) match(doc interface{}) bool {
+	data, err := bsonMarshall(doc)
+	if err != nil {
+		return false
+	}
+	um := userModel{}
+	err = bson.Unmarshal(data, &um)
+	if u.Id == um.Id {
+		return true
+	}
+	if u.Email == um.Email {
+		return true
+	}
+	if um.GroupId.Hex() != "" && um.GroupId.Hex() != "000000000000000000000000" {
+		if u.GroupId == um.GroupId && u.Username == um.Username {
+			return true
+		}
+		if u.GroupId == um.GroupId && u.FirstName == um.FirstName {
+			return true
+		}
+		if u.GroupId == um.GroupId && u.LastName == um.LastName {
+			return true
+		}
+		if u.GroupId == um.GroupId && u.RootAdmin == um.RootAdmin {
+			return true
+		}
+		if u.GroupId == um.GroupId && u.Role == um.Role {
+			return true
+		}
+		if u.GroupId == um.GroupId && u.LastModified == um.LastModified {
+			return true
+		}
+		if u.GroupId == um.GroupId && u.CreatedAt == um.CreatedAt {
+			return true
+		}
+		if u.GroupId == um.GroupId && u.DeletedAt == um.DeletedAt {
+			return true
+		}
+		if u.GroupId == um.GroupId {
+			return true
+		}
+	} else {
+		if u.Username == um.Username {
+			return true
+		}
+		if u.FirstName == um.FirstName {
+			return true
+		}
+		if u.LastName == um.LastName {
+			return true
+		}
+		if u.RootAdmin == um.RootAdmin {
+			return true
+		}
+		if u.Role == um.Role {
+			return true
+		}
+		if u.LastModified == um.LastModified {
+			return true
+		}
+		if u.CreatedAt == um.CreatedAt {
+			return true
+		}
+		if u.DeletedAt == um.DeletedAt {
+			return true
+		}
+	}
+	return false
+}
+
+// getID returns the unique identifier of the userModel
+func (u *userModel) getID() (id interface{}) {
+	return u.Id
 }
 
 // addTimeStamps updates an userModel struct with a timestamp
@@ -56,7 +165,7 @@ func (u *userModel) addTimeStamps(newRecord bool) {
 	}
 }
 
-// addObjectID checks if a userModel has a value assigned for Id, if no value a new one is generated and assigned
+// addObjectID checks if a userModel has a value assigned for Id if no value a new one is generated and assigned
 func (u *userModel) addObjectID() {
 	if u.Id.Hex() == "" || u.Id.Hex() == "000000000000000000000000" {
 		u.Id = primitive.NewObjectID()

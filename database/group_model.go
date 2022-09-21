@@ -27,10 +27,61 @@ func newGroupModel(g *models.Group) (gm *groupModel, err error) {
 		CreatedAt:    g.CreatedAt,
 		DeletedAt:    g.DeletedAt,
 	}
-	if g.Id != "" {
+	if g.Id != "" && g.Id != "000000000000000000000000" {
 		gm.Id, err = primitive.ObjectIDFromHex(g.Id)
 	}
 	return
+}
+
+// update the groupModel using an overwrite bson.D doc
+func (g *groupModel) update(doc interface{}) (err error) {
+	data, err := bsonMarshall(doc)
+	if err != nil {
+		return
+	}
+	gm := groupModel{}
+	err = bson.Unmarshal(data, &gm)
+	if len(gm.Name) > 0 {
+		g.Name = gm.Name
+	}
+	if !gm.LastModified.IsZero() {
+		g.LastModified = gm.LastModified
+	}
+	return
+}
+
+// match compares an input bson doc and returns whether there's a match with the groupModel
+func (g *groupModel) match(doc interface{}) bool {
+	data, err := bsonMarshall(doc)
+	if err != nil {
+		return false
+	}
+	gm := groupModel{}
+	err = bson.Unmarshal(data, &gm)
+	if g.Id == gm.Id {
+		return true
+	}
+	if g.Name == gm.Name {
+		return true
+	}
+	if g.RootAdmin == gm.RootAdmin {
+		return true
+	}
+	if g.LastModified == gm.LastModified {
+		return true
+	}
+	if g.CreatedAt == gm.CreatedAt {
+		return true
+	}
+	if g.DeletedAt == gm.DeletedAt {
+		return true
+	}
+	return false
+}
+
+// getID returns the unique identifier of the groupModel
+func (g *groupModel) getID() (id interface{}) {
+	return g.Id
 }
 
 // addTimeStamps updates a groupModel struct with a timestamp

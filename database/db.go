@@ -17,6 +17,9 @@ type dbModel interface {
 	addTimeStamps(newRecord bool)
 	addObjectID()
 	postProcess() (err error)
+	getID() (id interface{})
+	update(doc interface{}) (err error)
+	match(doc interface{}) bool
 }
 
 // DBClient is an abstraction of the dbClient and testDBClient types

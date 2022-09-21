@@ -22,10 +22,55 @@ func newBlacklistModel(bl *models.Blacklist) (bm *blacklistModel, err error) {
 		LastModified: bl.LastModified,
 		CreatedAt:    bl.CreatedAt,
 	}
-	if bl.Id != "" {
+	if bl.Id != "" && bl.Id != "000000000000000000000000" {
 		bm.Id, err = primitive.ObjectIDFromHex(bl.Id)
 	}
 	return
+}
+
+// update the blacklistModel using an overwrite bson doc
+func (b *blacklistModel) update(doc interface{}) (err error) {
+	data, err := bsonMarshall(doc)
+	if err != nil {
+		return
+	}
+	bm := blacklistModel{}
+	err = bson.Unmarshal(data, &bm)
+	if len(bm.AuthToken) > 0 {
+		b.AuthToken = bm.AuthToken
+	}
+	if !bm.LastModified.IsZero() {
+		b.LastModified = bm.LastModified
+	}
+	return
+}
+
+// match compares an input bson doc and returns whether there's a match with the blacklistModel
+func (b *blacklistModel) match(doc interface{}) bool {
+	data, err := bsonMarshall(doc)
+	if err != nil {
+		return false
+	}
+	bm := blacklistModel{}
+	err = bson.Unmarshal(data, &bm)
+	if b.Id == bm.Id {
+		return true
+	}
+	if b.AuthToken == bm.AuthToken {
+		return true
+	}
+	if b.LastModified == bm.LastModified {
+		return true
+	}
+	if b.CreatedAt == bm.CreatedAt {
+		return true
+	}
+	return false
+}
+
+// getID returns the unique identifier of the blacklistModel
+func (b *blacklistModel) getID() (id interface{}) {
+	return b.Id
 }
 
 // addTimeStamps updates a blacklistModel struct with a timestamp
