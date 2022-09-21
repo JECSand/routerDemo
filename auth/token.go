@@ -1,10 +1,11 @@
-package main
+package auth
 
 import (
 	"errors"
 	"fmt"
 	"github.com/dgrijalva/jwt-go"
 	"os"
+	"routerDemo/models"
 )
 
 // TokenData stores the structured data from a session token for use
@@ -15,9 +16,9 @@ type TokenData struct {
 	GroupId   string
 }
 
-// toUser creates a new User struct using the TokenData and returns a pointer to it
-func (t *TokenData) toUser() *User {
-	return &User{
+// ToUser creates a new User struct using the TokenData and returns a pointer to it
+func (t *TokenData) ToUser() *models.User {
+	return &models.User{
 		Id:        t.UserId,
 		Role:      t.Role,
 		RootAdmin: t.RootAdmin,
@@ -25,8 +26,17 @@ func (t *TokenData) toUser() *User {
 	}
 }
 
+// AdminRouteRoleCheck checks admin routes JWT tokens to ensure that a group admin does not break scope
+func (t *TokenData) AdminRouteRoleCheck() string {
+	groupId := ""
+	if t.RootAdmin {
+		groupId = t.GroupId
+	}
+	return groupId
+}
+
 // CreateToken is used to create a new session JWT token
-func CreateToken(user *User, exp int64) (string, error) {
+func CreateToken(user *models.User, exp int64) (string, error) {
 	var MySigningKey = []byte(os.Getenv("TOKEN_SECRET"))
 	token := jwt.New(jwt.SigningMethodHS256)
 	claims := token.Claims.(jwt.MapClaims)

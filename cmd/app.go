@@ -1,16 +1,21 @@
-package main
+package cmd
 
 import (
 	"context"
 	"go.mongodb.org/mongo-driver/bson"
 	"os"
+	"routerDemo/database"
+	"routerDemo/models"
+	"routerDemo/server"
+	"routerDemo/services"
+	"routerDemo/utilities"
 	"time"
 )
 
 // App is the highest level struct of the rest_api application. Stores the server, client, and config settings.
 type App struct {
-	server *Server
-	client *DBClient
+	server *server.Server
+	db     *database.DBClient
 }
 
 // Initialize is a function used to initialize a new instantiation of the API Application
@@ -23,34 +28,35 @@ func (a *App) Initialize() error {
 	}
 	conf.InitializeEnvironmentalVars()
 	// 2) Initialize & Connect DB Client
-	a.client, err = initializeNewClient()
+	a.db, err = database.InitializeNewClient()
 	if err != nil {
 		return err
 	}
-	err = a.client.Connect()
+	err = a.db.Connect()
 	if err != nil {
 		return err
 	}
 	// 3) Initial DB Services
-	gHandler := a.client.NewGroupHandler()
-	uHandler := a.client.NewUserHandler()
-	blHandler := a.client.NewBlacklistHandler()
-	gService := newGroupService(a.client, gHandler)
-	uService := newUserService(a.client, uHandler, gHandler)
-	aService := newAuthService(a.client, blHandler, uService, gService)
+	gHandler := a.db.NewGroupHandler()
+	uHandler := a.db.NewUserHandler()
+	blHandler := a.db.NewBlacklistHandler()
+	gService := database.NewGroupService(a.db, gHandler)
+	uService := database.NewUserService(a.db, uHandler, gHandler)
+	bService := database.NewBlacklistService(a.db, blHandler)
+	tService := services.NewTokenService(uService, gService, bService)
 	// 4) Create RootAdmin user if database is empty
-	var group Group
-	var adminUser User
+	var group models.Group
+	var adminUser models.User
 	group.Name = os.Getenv("ROOT_GROUP")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	docCount, err := a.client.client.Database(os.Getenv("DATABASE")).Collection("groups").CountDocuments(ctx, bson.M{})
+	docCount, err := a.db.Client.Database(os.Getenv("DATABASE")).Collection("groups").CountDocuments(ctx, bson.M{})
 	if err != nil {
 		return err
 	}
 	if docCount == 0 {
 		group.RootAdmin = true
-		group.Id = generateObjectID()
+		group.Id = utilities.GenerateObjectID()
 		adminGroup, err := gService.GroupCreate(&group)
 		if err != nil {
 			return err
@@ -67,12 +73,12 @@ func (a *App) Initialize() error {
 		}
 	}
 	// 5) Initialize Server
-	a.server = NewServer(uService, gService, aService)
+	a.server = server.NewServer(uService, gService, tService)
 	return nil
 }
 
 // Run is a function used to run a previously initialized API Application
 func (a *App) Run() {
-	defer a.client.Close()
+	defer a.db.Close()
 	a.server.Start()
 }

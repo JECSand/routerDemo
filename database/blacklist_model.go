@@ -1,9 +1,10 @@
-package main
+package database
 
 import (
 	"errors"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"routerDemo/models"
 	"time"
 )
 
@@ -15,7 +16,7 @@ type blacklistModel struct {
 }
 
 // newBlacklistModel initializes a new pointer to a blacklistModel struct from a pointer to a JSON Blacklist struct
-func newBlacklistModel(bl *Blacklist) (bm *blacklistModel, err error) {
+func newBlacklistModel(bl *models.Blacklist) (bm *blacklistModel, err error) {
 	bm = &blacklistModel{
 		AuthToken:    bl.AuthToken,
 		LastModified: bl.LastModified,
@@ -80,8 +81,8 @@ func (b *blacklistModel) bsonUpdate() (doc bson.D, err error) {
 }
 
 // toRoot creates and return a new pointer to a Blacklist JSON struct from a pointer to a BSON blacklistModel
-func (b *blacklistModel) toRoot() *Blacklist {
-	return &Blacklist{
+func (b *blacklistModel) toRoot() *models.Blacklist {
+	return &models.Blacklist{
 		Id:           b.Id.Hex(),
 		AuthToken:    b.AuthToken,
 		LastModified: b.LastModified,

@@ -1,4 +1,4 @@
-package main
+package models
 
 import "time"
 
@@ -17,6 +17,7 @@ func (g *Group) Validate() (err error) {
 	return
 }
 
+/*
 // GroupService is an interface used to manage the relevant group doc controllers
 type GroupService interface {
 	GroupCreate(g *Group) (*Group, error)
@@ -26,3 +27,4 @@ type GroupService interface {
 	GroupUpdate(g *Group) (*Group, error)
 	GroupDocInsert(g *Group) (*Group, error)
 }
+*/

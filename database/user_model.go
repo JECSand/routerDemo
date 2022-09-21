@@ -1,9 +1,10 @@
-package main
+package database
 
 import (
 	"errors"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"routerDemo/models"
 	"time"
 )
 
@@ -24,7 +25,7 @@ type userModel struct {
 }
 
 // newUserModel initializes a new pointer to a userModel struct from a pointer to a JSON User struct
-func newUserModel(u *User) (um *userModel, err error) {
+func newUserModel(u *models.User) (um *userModel, err error) {
 	um = &userModel{
 		Username:     u.Username,
 		Password:     u.Password,
@@ -105,8 +106,8 @@ func (u *userModel) bsonUpdate() (doc bson.D, err error) {
 }
 
 // toRoot creates and return a new pointer to a User JSON struct from a pointer to a BSON userModel
-func (u *userModel) toRoot() *User {
-	return &User{
+func (u *userModel) toRoot() *models.User {
+	return &models.User{
 		Id:           u.Id.Hex(),
 		Username:     u.Username,
 		Password:     u.Password,

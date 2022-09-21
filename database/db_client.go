@@ -1,4 +1,4 @@
-package main
+package database
 
 import (
 	"context"
@@ -28,14 +28,14 @@ type DBHandler[T dbModel] struct {
 // DBClient manages a database connection
 type DBClient struct {
 	connectionURI string
-	client        *mongo.Client
+	Client        *mongo.Client
 }
 
-// initializeNewClient is a function that takes a mongoUri string and outputs a connected mongo client for the app to use
-func initializeNewClient() (*DBClient, error) {
+// InitializeNewClient is a function that takes a mongoUri string and outputs a connected mongo client for the app to use
+func InitializeNewClient() (*DBClient, error) {
 	newDBClient := DBClient{connectionURI: os.Getenv("MONGO_URI")}
 	var err error
-	newDBClient.client, err = mongo.NewClient(options.Client().ApplyURI(newDBClient.connectionURI))
+	newDBClient.Client, err = mongo.NewClient(options.Client().ApplyURI(newDBClient.connectionURI))
 	return &newDBClient, err
 }
 
@@ -43,7 +43,7 @@ func initializeNewClient() (*DBClient, error) {
 func (db *DBClient) Connect() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	err := db.client.Connect(ctx)
+	err := db.Client.Connect(ctx)
 	return err
 }
 
@@ -51,13 +51,13 @@ func (db *DBClient) Connect() error {
 func (db *DBClient) Close() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	err := db.client.Disconnect(ctx)
+	err := db.Client.Disconnect(ctx)
 	return err
 }
 
 // NewDBHandler returns a new DBHandler generic interface
 func (db *DBClient) NewDBHandler(collectionName string) *DBHandler[dbModel] {
-	col := db.client.Database(os.Getenv("DATABASE")).Collection(collectionName)
+	col := db.Client.Database(os.Getenv("DATABASE")).Collection(collectionName)
 	return &DBHandler[dbModel]{
 		db:         db,
 		collection: col,
@@ -66,7 +66,7 @@ func (db *DBClient) NewDBHandler(collectionName string) *DBHandler[dbModel] {
 
 // NewUserHandler returns a new DBHandler users interface
 func (db *DBClient) NewUserHandler() *DBHandler[*userModel] {
-	col := db.client.Database(os.Getenv("DATABASE")).Collection("users")
+	col := db.Client.Database(os.Getenv("DATABASE")).Collection("users")
 	return &DBHandler[*userModel]{
 		db:         db,
 		collection: col,
@@ -75,7 +75,7 @@ func (db *DBClient) NewUserHandler() *DBHandler[*userModel] {
 
 // NewGroupHandler returns a new DBHandler groups interface
 func (db *DBClient) NewGroupHandler() *DBHandler[*groupModel] {
-	col := db.client.Database(os.Getenv("DATABASE")).Collection("groups")
+	col := db.Client.Database(os.Getenv("DATABASE")).Collection("groups")
 	return &DBHandler[*groupModel]{
 		db:         db,
 		collection: col,
@@ -84,7 +84,7 @@ func (db *DBClient) NewGroupHandler() *DBHandler[*groupModel] {
 
 // NewBlacklistHandler returns a new DBHandler blacklist interface
 func (db *DBClient) NewBlacklistHandler() *DBHandler[*blacklistModel] {
-	col := db.client.Database(os.Getenv("DATABASE")).Collection("blacklists")
+	col := db.Client.Database(os.Getenv("DATABASE")).Collection("blacklists")
 	return &DBHandler[*blacklistModel]{
 		db:         db,
 		collection: col,

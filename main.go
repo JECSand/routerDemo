@@ -1,7 +1,9 @@
 package main
 
+import "routerDemo/cmd"
+
 func main() {
-	var app App
+	var app cmd.App
 	err := app.Initialize()
 	if err != nil {
 		panic(err)

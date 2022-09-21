@@ -1,9 +1,10 @@
-package main
+package database
 
 import (
 	"errors"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"routerDemo/models"
 	"time"
 )
 
@@ -18,7 +19,7 @@ type groupModel struct {
 }
 
 // newGroupModel initializes a new pointer to a groupModel struct from a pointer to a JSON Group struct
-func newGroupModel(g *Group) (gm *groupModel, err error) {
+func newGroupModel(g *models.Group) (gm *groupModel, err error) {
 	gm = &groupModel{
 		Name:         g.Name,
 		RootAdmin:    g.RootAdmin,
@@ -86,8 +87,8 @@ func (g *groupModel) bsonUpdate() (doc bson.D, err error) {
 }
 
 // toRoot creates and return a new pointer to a Group JSON struct from a pointer to a BSON groupModel
-func (g *groupModel) toRoot() *Group {
-	return &Group{
+func (g *groupModel) toRoot() *models.Group {
+	return &models.Group{
 		Id:           g.Id.Hex(),
 		Name:         g.Name,
 		RootAdmin:    g.RootAdmin,

@@ -1,4 +1,4 @@
-package main
+package utilities
 
 import (
 	"encoding/json"
@@ -6,8 +6,19 @@ import (
 	"net/http"
 )
 
-// generateObjectID for index keying records of data
-func generateObjectID() string {
+// JsonErr structures a standard error to return
+type JsonErr struct {
+	Code int    `json:"code"`
+	Text string `json:"text"`
+}
+
+// JWTError is a struct that is used to contain a json encoded error message for any JWT related errors
+type JWTError struct {
+	Message string `json:"message"`
+}
+
+// GenerateObjectID for index keying records of data
+func GenerateObjectID() string {
 	newId := primitive.NewObjectID()
 	return newId.Hex()
 }
@@ -38,28 +49,8 @@ func SetResponseHeaders(w http.ResponseWriter, authToken string, apiKey string) 
 	return w
 }
 
-// AdminRouteRoleCheck checks admin routes JWT tokens to ensure that a group admin does not break scope
-func AdminRouteRoleCheck(decodedToken *TokenData) string {
-	groupId := ""
-	if decodedToken.RootAdmin {
-		groupId = decodedToken.GroupId
-	}
-	return groupId
-}
-
-// jsonErr structures a standard error to return
-type jsonErr struct {
-	Code int    `json:"code"`
-	Text string `json:"text"`
-}
-
-// JWTError is a struct that is used to contain a json encoded error message for any JWT related errors
-type JWTError struct {
-	Message string `json:"message"`
-}
-
-// Return JSON Error to Requested is Auth is bad
-func respondWithError(w http.ResponseWriter, status int, error JWTError) {
+// RespondWithError returns JSON Error to Requested is Auth is bad
+func RespondWithError(w http.ResponseWriter, status int, error JWTError) {
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.Header().Add("Access-Control-Allow-Headers", "Content-Type, Auth-Token")
 	w.Header().Add("Access-Control-Expose-Headers", "Content-Type, Auth-Token")

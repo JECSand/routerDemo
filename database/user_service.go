@@ -1,4 +1,4 @@
-package main
+package database
 
 import (
 	"context"
@@ -7,32 +7,35 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/crypto/bcrypt"
 	"os"
+	"routerDemo/auth"
+	"routerDemo/models"
+	"routerDemo/utilities"
 	"time"
 )
 
-// userService is used by the app to manage all user related controllers and functionality
-type userService struct {
+// UserService is used by the app to manage all user related controllers and functionality
+type UserService struct {
 	collection   *mongo.Collection
 	db           *DBClient
 	userHandler  *DBHandler[*userModel]
 	groupHandler *DBHandler[*groupModel]
 }
 
-// newUserService is an exported function used to initialize a new UserService struct
-func newUserService(db *DBClient, uHandler *DBHandler[*userModel], gHandler *DBHandler[*groupModel]) *userService {
-	collection := db.client.Database(os.Getenv("DATABASE")).Collection("users")
-	return &userService{collection, db, uHandler, gHandler}
+// NewUserService is an exported function used to initialize a new UserService struct
+func NewUserService(db *DBClient, uHandler *DBHandler[*userModel], gHandler *DBHandler[*groupModel]) *UserService {
+	collection := db.Client.Database(os.Getenv("DATABASE")).Collection("users")
+	return &UserService{collection, db, uHandler, gHandler}
 }
 
 // AuthenticateUser is used to authenticate users that are signing in
-func (p *userService) AuthenticateUser(u *User) (*User, error) {
+func (p *UserService) AuthenticateUser(u *models.User) (*models.User, error) {
 	um, err := newUserModel(u)
 	if err != nil {
 		return u, err
 	}
 	checkUser, err := p.userHandler.FindOne(um)
 	if err != nil {
-		return &User{}, errors.New("invalid email")
+		return &models.User{}, errors.New("invalid email")
 	}
 	rootUser := checkUser.toRoot()
 	password := []byte(u.Password)
@@ -45,7 +48,7 @@ func (p *userService) AuthenticateUser(u *User) (*User, error) {
 }
 
 // UserCreate is used to create a new user
-func (p *userService) UserCreate(u *User) (*User, error) {
+func (p *UserService) UserCreate(u *models.User) (*models.User, error) {
 	um, err := newUserModel(u)
 	if err != nil {
 		return u, err
@@ -59,11 +62,11 @@ func (p *userService) UserCreate(u *User) (*User, error) {
 	_, emailErr := p.userHandler.FindOne(&userModel{Email: um.Email})
 	_, groupErr := p.groupHandler.FindOne(&groupModel{Id: um.GroupId})
 	if emailErr == nil {
-		return &User{}, errors.New("email has been taken")
+		return &models.User{}, errors.New("email has been taken")
 	} else if groupErr != nil {
-		return &User{}, errors.New("invalid group id")
+		return &models.User{}, errors.New("invalid group id")
 	}
-	u.Id = generateObjectID()
+	u.Id = utilities.GenerateObjectID()
 	password := []byte(u.Password)
 	hashedPassword, err := bcrypt.GenerateFromPassword(password, bcrypt.DefaultCost)
 	if err != nil {
@@ -86,7 +89,7 @@ func (p *userService) UserCreate(u *User) (*User, error) {
 }
 
 // UserDelete is used to delete an User
-func (p *userService) UserDelete(u *User) (*User, error) {
+func (p *UserService) UserDelete(u *models.User) (*models.User, error) {
 	um, err := newUserModel(u)
 	if err != nil {
 		return u, err
@@ -96,8 +99,8 @@ func (p *userService) UserDelete(u *User) (*User, error) {
 }
 
 // UsersFind is used to find all user docs
-func (p *userService) UsersFind(u *User) ([]*User, error) {
-	var users []*User
+func (p *UserService) UsersFind(u *models.User) ([]*models.User, error) {
+	var users []*models.User
 	um, err := newUserModel(u)
 	if err != nil {
 		return users, err
@@ -113,7 +116,7 @@ func (p *userService) UsersFind(u *User) ([]*User, error) {
 }
 
 // UserFind is used to find a specific user doc
-func (p *userService) UserFind(u *User) (*User, error) {
+func (p *UserService) UserFind(u *models.User) (*models.User, error) {
 	um, err := newUserModel(u)
 	if err != nil {
 		return u, err
@@ -123,15 +126,15 @@ func (p *userService) UserFind(u *User) (*User, error) {
 }
 
 // UserUpdate is used to update an existing user doc
-func (p *userService) UserUpdate(u *User) (*User, error) {
+func (p *UserService) UserUpdate(u *models.User) (*models.User, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	docCount, err := p.collection.CountDocuments(ctx, bson.M{})
 	if err != nil {
-		return &User{}, err
+		return &models.User{}, err
 	}
 	if docCount == 0 {
-		return &User{}, errors.New("no users found")
+		return &models.User{}, errors.New("no users found")
 	}
 	um, err := newUserModel(u)
 	if err != nil {
@@ -141,13 +144,13 @@ func (p *userService) UserUpdate(u *User) (*User, error) {
 	if err != nil {
 		return u, err
 	}
-	u.BuildUpdate(curUser)
+	u.BuildUpdate(curUser.toRoot())
 	_, emailErr := p.userHandler.FindOne(&userModel{Email: um.Email})
 	_, groupErr := p.groupHandler.FindOne(&groupModel{Id: um.GroupId})
 	if emailErr == nil && curUser.Email != u.Email {
-		return &User{}, errors.New("email is taken")
+		return &models.User{}, errors.New("email is taken")
 	} else if groupErr != nil {
-		return &User{}, errors.New("invalid group id")
+		return &models.User{}, errors.New("invalid group id")
 	}
 	um, err = newUserModel(u)
 	if err != nil {
@@ -158,7 +161,7 @@ func (p *userService) UserUpdate(u *User) (*User, error) {
 		hashedPassword, err := bcrypt.GenerateFromPassword(password, bcrypt.DefaultCost)
 		um.Password = string(hashedPassword)
 		if err != nil {
-			return &User{}, err
+			return &models.User{}, err
 		}
 	}
 	um, err = p.userHandler.UpdateOne(um)
@@ -166,14 +169,14 @@ func (p *userService) UserUpdate(u *User) (*User, error) {
 }
 
 // UpdatePassword is used to update the currently logged-in user's password
-func (p *userService) UpdatePassword(tokenData *TokenData, currentPassword string, newPassword string) (*User, error) {
-	um, err := newUserModel(tokenData.toUser())
+func (p *UserService) UpdatePassword(tokenData *auth.TokenData, currentPassword string, newPassword string) (*models.User, error) {
+	um, err := newUserModel(tokenData.ToUser())
 	if err != nil {
-		return &User{}, err
+		return &models.User{}, err
 	}
 	user, err := p.userHandler.FindOne(um)
 	if err != nil {
-		return &User{}, err
+		return &models.User{}, err
 	}
 	// 2. Check current password
 	password := []byte(currentPassword)
@@ -183,7 +186,7 @@ func (p *userService) UpdatePassword(tokenData *TokenData, currentPassword strin
 		currentTime := time.Now().UTC()
 		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 		if err != nil {
-			return &User{}, err
+			return &models.User{}, err
 		}
 		filter := bson.D{{"_id", user.Id}}
 		update := bson.D{{"$set",
@@ -196,16 +199,16 @@ func (p *userService) UpdatePassword(tokenData *TokenData, currentPassword strin
 		defer cancel()
 		_, err = p.collection.UpdateOne(ctx, filter, update)
 		if err != nil {
-			return &User{}, err
+			return &models.User{}, err
 		}
 		user.Password = ""
 		return user.toRoot(), nil
 	}
-	return &User{}, errors.New("invalid password")
+	return &models.User{}, errors.New("invalid password")
 }
 
 // UserDocInsert is used to insert user doc directly into mongodb for testing purposes
-func (p *userService) UserDocInsert(u *User) (*User, error) {
+func (p *UserService) UserDocInsert(u *models.User) (*models.User, error) {
 	password := []byte(u.Password)
 	hashedPassword, err := bcrypt.GenerateFromPassword(password, bcrypt.DefaultCost)
 	if err != nil {

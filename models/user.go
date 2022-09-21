@@ -1,4 +1,4 @@
-package main
+package models
 
 import "time"
 
@@ -24,7 +24,7 @@ func (g *User) Validate() (err error) {
 }
 
 // BuildUpdate is a function that setups the base user struct during a user modification request
-func (g *User) BuildUpdate(curUser *userModel) {
+func (g *User) BuildUpdate(curUser *User) {
 	if len(g.Username) == 0 {
 		g.Username = curUser.Username
 	}
@@ -38,13 +38,14 @@ func (g *User) BuildUpdate(curUser *userModel) {
 		g.Email = curUser.Email
 	}
 	if len(g.GroupId) == 0 {
-		g.GroupId = curUser.GroupId.Hex()
+		g.GroupId = curUser.GroupId
 	}
 	if len(g.Role) == 0 {
 		g.Role = curUser.Role
 	}
 }
 
+/*
 // UserService is an interface used to manage the relevant user doc controllers
 type UserService interface {
 	AuthenticateUser(u *User) (*User, error)
@@ -56,3 +57,4 @@ type UserService interface {
 	UserUpdate(u *User) (*User, error)
 	UserDocInsert(u *User) (*User, error)
 }
+*/
