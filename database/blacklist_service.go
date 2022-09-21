@@ -1,20 +1,15 @@
 package database
 
-import (
-	"go.mongodb.org/mongo-driver/mongo"
-	"os"
-)
-
 // BlacklistService is used by the app to manage all group related controllers and functionality
 type BlacklistService struct {
-	collection *mongo.Collection
-	db         *DBClient
+	collection DBCollection
+	db         DBClient
 	handler    *DBHandler[*blacklistModel]
 }
 
 // NewBlacklistService is an exported function used to initialize a new GroupService struct
-func NewBlacklistService(db *DBClient, handler *DBHandler[*blacklistModel]) *BlacklistService {
-	collection := db.Client.Database(os.Getenv("DATABASE")).Collection("blacklists")
+func NewBlacklistService(db DBClient, handler *DBHandler[*blacklistModel]) *BlacklistService {
+	collection := db.GetCollection("blacklists")
 	return &BlacklistService{collection, db, handler}
 }
 

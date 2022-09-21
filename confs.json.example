@@ -6,5 +6,6 @@
     "RootPassword": "<MASTER_ADMIN_PASSWORD>",
     "RootEmail": "<MASTER_ADMIN_EMAIL>",
     "RootGroup": "<MASTER_ADMIN_GROUP>",
-    "Registration": "<ON | OFF>"
+    "Registration": "<ON | OFF>",
+    "ENV": "<development | production | test>"
 }

@@ -5,8 +5,8 @@ import (
 	"os"
 )
 
-// Configuration is a struct designed to hold the applications variable configuration settings
-type Configuration struct {
+// configuration is a struct designed to hold the applications variable configuration settings
+type configuration struct {
 	MongoURI     string
 	Database     string
 	TokenSecret  string
@@ -15,14 +15,15 @@ type Configuration struct {
 	RootEmail    string
 	RootGroup    string
 	Registration string
+	ENV          string
 }
 
-// ConfigurationSettings is a function that reads a json configuration file and outputs a Configuration struct
-func ConfigurationSettings() (*Configuration, error) {
+// getConfigurations is a function that reads a json configuration file and outputs a Configuration struct
+func getConfigurations() (*configuration, error) {
 	confFile := "confs.json"
 	file, _ := os.Open(confFile)
 	decoder := json.NewDecoder(file)
-	configurationSettings := Configuration{}
+	configurationSettings := configuration{}
 	err := decoder.Decode(&configurationSettings)
 	if err != nil {
 		return &configurationSettings, err
@@ -31,7 +32,7 @@ func ConfigurationSettings() (*Configuration, error) {
 }
 
 // InitializeEnvironmentalVars initializes the environmental variables for the application
-func (c *Configuration) InitializeEnvironmentalVars() {
+func (c *configuration) InitializeEnvironmentalVars() {
 	os.Setenv("MONGO_URI", c.MongoURI)
 	os.Setenv("DATABASE", c.Database)
 	os.Setenv("TOKEN_SECRET", c.TokenSecret)
@@ -40,4 +41,5 @@ func (c *Configuration) InitializeEnvironmentalVars() {
 	os.Setenv("ROOT_EMAIL", c.RootEmail)
 	os.Setenv("ROOT_GROUP", c.RootGroup)
 	os.Setenv("REGISTRATION", c.Registration)
+	os.Setenv("ENV", c.ENV)
 }

@@ -15,14 +15,14 @@ import (
 // App is the highest level struct of the rest_api application. Stores the server, client, and config settings.
 type App struct {
 	server *server.Server
-	db     *database.DBClient
+	db     database.DBClient
 }
 
 // Initialize is a function used to initialize a new instantiation of the API Application
 func (a *App) Initialize() error {
 	var err error
 	// 1) Initialize config settings & set environmental variables
-	conf, err := ConfigurationSettings()
+	conf, err := getConfigurations()
 	if err != nil {
 		return err
 	}
@@ -50,7 +50,7 @@ func (a *App) Initialize() error {
 	group.Name = os.Getenv("ROOT_GROUP")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	docCount, err := a.db.Client.Database(os.Getenv("DATABASE")).Collection("groups").CountDocuments(ctx, bson.M{})
+	docCount, err := a.db.GetCollection("groups").CountDocuments(ctx, bson.M{})
 	if err != nil {
 		return err
 	}

@@ -19,45 +19,91 @@ type dbModel interface {
 	postProcess() (err error)
 }
 
-// DBHandler is a Generic type struct for organizing dbModel methods
-type DBHandler[T dbModel] struct {
-	db         *DBClient
-	collection *mongo.Collection
+// DBClient is an abstraction of the dbClient and testDBClient types
+type DBClient interface {
+	Connect() error
+	Close() error
+	GetCollection(collectionName string) DBCollection
+	NewDBHandler(collectionName string) *DBHandler[dbModel]
+	NewUserHandler() *DBHandler[*userModel]
+	NewGroupHandler() *DBHandler[*groupModel]
+	NewBlacklistHandler() *DBHandler[*blacklistModel]
+}
+
+// DBCursor is an abstraction of the dbClient and testDBClient types
+type DBCursor interface {
+	Next(ctx context.Context) bool
+	Decode(val interface{}) error
+	Close(ctx context.Context) error
+}
+
+// checkCursorENV returns a DBCursor based on the ENV
+func checkCursorENV(cur *mongo.Cursor) DBCursor {
+	if os.Getenv("ENV") == "test" {
+		return newTestMongoCursor(cur)
+	}
+	return cur
+}
+
+// DBCollection is an abstraction of the dbClient and testDBClient types
+type DBCollection interface {
+	InsertOne(ctx context.Context, document interface{}, opts ...*options.InsertOneOptions) (*mongo.InsertOneResult, error)
+	InsertMany(ctx context.Context, documents []interface{}, opts ...*options.InsertManyOptions) (*mongo.InsertManyResult, error)
+	DeleteOne(ctx context.Context, filter interface{}, opts ...*options.DeleteOptions) (*mongo.DeleteResult, error)
+	FindOneAndDelete(ctx context.Context, filter interface{}, opts ...*options.FindOneAndDeleteOptions) *mongo.SingleResult
+	UpdateOne(ctx context.Context, filter interface{}, update interface{}, opts ...*options.UpdateOptions) (*mongo.UpdateResult, error)
+	UpdateByID(ctx context.Context, id interface{}, update interface{}, opts ...*options.UpdateOptions) (*mongo.UpdateResult, error)
+	Find(ctx context.Context, filter interface{}, opts ...*options.FindOptions) (cur *mongo.Cursor, err error)
+	FindOne(ctx context.Context, filter interface{}, opts ...*options.FindOneOptions) *mongo.SingleResult
+	CountDocuments(ctx context.Context, filter interface{}, opts ...*options.CountOptions) (int64, error)
 }
 
 // DBClient manages a database connection
-type DBClient struct {
+type dbClient struct {
 	connectionURI string
-	Client        *mongo.Client
+	client        *mongo.Client
+}
+
+// InitializeNewClient returns an initialized DBClient based on the ENV
+func InitializeNewClient() (DBClient, error) {
+	if os.Getenv("ENV") == "test" {
+		return initializeNewTestClient()
+	}
+	return initializeNewClient()
 }
 
 // InitializeNewClient is a function that takes a mongoUri string and outputs a connected mongo client for the app to use
-func InitializeNewClient() (*DBClient, error) {
-	newDBClient := DBClient{connectionURI: os.Getenv("MONGO_URI")}
+func initializeNewClient() (*dbClient, error) {
+	newDBClient := dbClient{connectionURI: os.Getenv("MONGO_URI")}
 	var err error
-	newDBClient.Client, err = mongo.NewClient(options.Client().ApplyURI(newDBClient.connectionURI))
+	newDBClient.client, err = mongo.NewClient(options.Client().ApplyURI(newDBClient.connectionURI))
 	return &newDBClient, err
 }
 
 // Connect opens a new connection to the database
-func (db *DBClient) Connect() error {
+func (db *dbClient) Connect() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	err := db.Client.Connect(ctx)
+	err := db.client.Connect(ctx)
 	return err
 }
 
 // Close closes an open DB connection
-func (db *DBClient) Close() error {
+func (db *dbClient) Close() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	err := db.Client.Disconnect(ctx)
+	err := db.client.Disconnect(ctx)
 	return err
 }
 
+// GetCollection returns a mongo collection based on the input collection name
+func (db *dbClient) GetCollection(collectionName string) DBCollection {
+	return db.client.Database(os.Getenv("DATABASE")).Collection(collectionName)
+}
+
 // NewDBHandler returns a new DBHandler generic interface
-func (db *DBClient) NewDBHandler(collectionName string) *DBHandler[dbModel] {
-	col := db.Client.Database(os.Getenv("DATABASE")).Collection(collectionName)
+func (db *dbClient) NewDBHandler(collectionName string) *DBHandler[dbModel] {
+	col := db.GetCollection(collectionName)
 	return &DBHandler[dbModel]{
 		db:         db,
 		collection: col,
@@ -65,8 +111,8 @@ func (db *DBClient) NewDBHandler(collectionName string) *DBHandler[dbModel] {
 }
 
 // NewUserHandler returns a new DBHandler users interface
-func (db *DBClient) NewUserHandler() *DBHandler[*userModel] {
-	col := db.Client.Database(os.Getenv("DATABASE")).Collection("users")
+func (db *dbClient) NewUserHandler() *DBHandler[*userModel] {
+	col := db.GetCollection("users")
 	return &DBHandler[*userModel]{
 		db:         db,
 		collection: col,
@@ -74,8 +120,8 @@ func (db *DBClient) NewUserHandler() *DBHandler[*userModel] {
 }
 
 // NewGroupHandler returns a new DBHandler groups interface
-func (db *DBClient) NewGroupHandler() *DBHandler[*groupModel] {
-	col := db.Client.Database(os.Getenv("DATABASE")).Collection("groups")
+func (db *dbClient) NewGroupHandler() *DBHandler[*groupModel] {
+	col := db.GetCollection("groups")
 	return &DBHandler[*groupModel]{
 		db:         db,
 		collection: col,
@@ -83,12 +129,18 @@ func (db *DBClient) NewGroupHandler() *DBHandler[*groupModel] {
 }
 
 // NewBlacklistHandler returns a new DBHandler blacklist interface
-func (db *DBClient) NewBlacklistHandler() *DBHandler[*blacklistModel] {
-	col := db.Client.Database(os.Getenv("DATABASE")).Collection("blacklists")
+func (db *dbClient) NewBlacklistHandler() *DBHandler[*blacklistModel] {
+	col := db.GetCollection("blacklists")
 	return &DBHandler[*blacklistModel]{
 		db:         db,
 		collection: col,
 	}
+}
+
+// DBHandler is a Generic type struct for organizing dbModel methods
+type DBHandler[T dbModel] struct {
+	db         DBClient
+	collection DBCollection
 }
 
 // FindOne is used to get a dbModel from the db with custom filter
@@ -116,15 +168,16 @@ func (h *DBHandler[T]) FindMany(filter T) ([]T, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	var cursor *mongo.Cursor
+	var cur *mongo.Cursor
 	if len(f) > 0 {
-		cursor, err = h.collection.Find(ctx, f)
+		cur, err = h.collection.Find(ctx, f)
 	} else {
-		cursor, err = h.collection.Find(ctx, bson.M{})
+		cur, err = h.collection.Find(ctx, bson.M{})
 	}
 	if err != nil {
 		return m, err
 	}
+	cursor := checkCursorENV(cur)
 	defer cursor.Close(ctx)
 	for cursor.Next(ctx) {
 		var md T

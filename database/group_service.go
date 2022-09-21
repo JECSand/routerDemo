@@ -3,22 +3,20 @@ package database
 import (
 	"context"
 	"errors"
-	"go.mongodb.org/mongo-driver/mongo"
-	"os"
 	"routerDemo/models"
 	"time"
 )
 
 // GroupService is used by the app to manage all group related controllers and functionality
 type GroupService struct {
-	collection *mongo.Collection
-	db         *DBClient
+	collection DBCollection
+	db         DBClient
 	handler    *DBHandler[*groupModel]
 }
 
 // NewGroupService is an exported function used to initialize a new GroupService struct
-func NewGroupService(db *DBClient, handler *DBHandler[*groupModel]) *GroupService {
-	collection := db.Client.Database(os.Getenv("DATABASE")).Collection("groups")
+func NewGroupService(db DBClient, handler *DBHandler[*groupModel]) *GroupService {
+	collection := db.GetCollection("groups")
 	return &GroupService{collection, db, handler}
 }
 

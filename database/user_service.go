@@ -4,9 +4,7 @@ import (
 	"context"
 	"errors"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/crypto/bcrypt"
-	"os"
 	"routerDemo/auth"
 	"routerDemo/models"
 	"routerDemo/utilities"
@@ -15,15 +13,15 @@ import (
 
 // UserService is used by the app to manage all user related controllers and functionality
 type UserService struct {
-	collection   *mongo.Collection
-	db           *DBClient
+	collection   DBCollection
+	db           DBClient
 	userHandler  *DBHandler[*userModel]
 	groupHandler *DBHandler[*groupModel]
 }
 
 // NewUserService is an exported function used to initialize a new UserService struct
-func NewUserService(db *DBClient, uHandler *DBHandler[*userModel], gHandler *DBHandler[*groupModel]) *UserService {
-	collection := db.Client.Database(os.Getenv("DATABASE")).Collection("users")
+func NewUserService(db DBClient, uHandler *DBHandler[*userModel], gHandler *DBHandler[*groupModel]) *UserService {
+	collection := db.GetCollection("users")
 	return &UserService{collection, db, uHandler, gHandler}
 }
 
