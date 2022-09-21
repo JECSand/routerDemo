@@ -16,6 +16,20 @@ type TokenData struct {
 	GroupId   string
 }
 
+// InitUserToken inputs a pointer to a user and returns TokenData
+func InitUserToken(u *models.User) (*TokenData, error) {
+	err := u.Validate("auth")
+	if err != nil {
+		return &TokenData{}, err
+	}
+	return &TokenData{
+		UserId:    u.Id,
+		Role:      u.Role,
+		RootAdmin: u.RootAdmin,
+		GroupId:   u.GroupId,
+	}, nil
+}
+
 // ToUser creates a new User struct using the TokenData and returns a pointer to it
 func (t *TokenData) ToUser() *models.User {
 	return &models.User{
@@ -36,14 +50,20 @@ func (t *TokenData) AdminRouteRoleCheck() string {
 }
 
 // CreateToken is used to create a new session JWT token
-func CreateToken(user *models.User, exp int64) (string, error) {
+func (t *TokenData) CreateToken(exp int64) (string, error) {
+	if t.UserId == "" || t.GroupId == "" || t.Role == "" {
+		return "", errors.New("missing required token claims")
+	}
+	if exp == 0 {
+		return "", errors.New("new token must have a expiration time greater than 0")
+	}
 	var MySigningKey = []byte(os.Getenv("TOKEN_SECRET"))
 	token := jwt.New(jwt.SigningMethodHS256)
 	claims := token.Claims.(jwt.MapClaims)
-	claims["id"] = user.Id
-	claims["role"] = user.Role
-	claims["root"] = user.RootAdmin
-	claims["group_id"] = user.GroupId
+	claims["id"] = t.UserId
+	claims["role"] = t.Role
+	claims["root"] = t.RootAdmin
+	claims["group_id"] = t.GroupId
 	claims["exp"] = exp
 	return token.SignedString(MySigningKey)
 }

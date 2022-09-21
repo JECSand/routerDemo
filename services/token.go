@@ -5,6 +5,7 @@ import (
 	"routerDemo/auth"
 	"routerDemo/models"
 	"routerDemo/utilities"
+	"time"
 )
 
 // TokenService is used by the app to manage db auth functionality
@@ -30,14 +31,14 @@ func (a *TokenService) verifyTokenUser(decodedToken *auth.TokenData) (bool, stri
 	if err != nil {
 		return false, err.Error()
 	}
-	// get User's and User's group docs based on token's user uuid
+	// validate the Group id of the User and the associated User's Group
 	if checkUser.GroupId != checkGroup.Id {
 		return false, "Incorrect group id"
 	}
 	return true, "No Error"
 }
 
-// tokenVerifyMiddleWare
+// tokenVerifyMiddleWare inputs the route handler function along with User roleType to verify User token and permissions
 func (a *TokenService) tokenVerifyMiddleWare(roleType string, next http.HandlerFunc, w http.ResponseWriter, r *http.Request) {
 	var errorObject utilities.JWTError
 	authToken := r.Header.Get("Auth-Token")
@@ -68,6 +69,19 @@ func (a *TokenService) tokenVerifyMiddleWare(roleType string, next http.HandlerF
 		utilities.RespondWithError(w, http.StatusUnauthorized, errorObject)
 		return
 	}
+}
+
+// GenerateToken outputs an auth token string for an inputted User
+func (a *TokenService) GenerateToken(u *models.User, tType string) (string, error) {
+	expDT := time.Now().Add(time.Hour * 1).Unix() // Default 1 hour expiration for session token
+	if tType == "api" {
+		expDT = time.Now().Add(time.Hour * 4380).Unix() // 6 month expiration for api key
+	}
+	tData, err := auth.InitUserToken(u)
+	if err != nil {
+		return "", err
+	}
+	return tData.CreateToken(expDT)
 }
 
 // AdminTokenVerifyMiddleWare is used to verify that the requester is a valid admin

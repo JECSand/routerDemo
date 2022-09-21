@@ -10,7 +10,6 @@ import (
 	"routerDemo/models"
 	"routerDemo/services"
 	"routerDemo/utilities"
-	"time"
 )
 
 type userRouter struct {
@@ -155,8 +154,7 @@ func (ur *userRouter) Signin(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	} else {
-		expDT := time.Now().Add(time.Hour * 1).Unix()
-		sessionToken, err := auth.CreateToken(u, expDT)
+		sessionToken, err := ur.aService.GenerateToken(u, "session")
 		if err != nil {
 			return
 		}
@@ -181,8 +179,7 @@ func (ur *userRouter) RefreshSession(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	expDT := time.Now().Add(time.Hour * 1).Unix()
-	newToken, err := auth.CreateToken(user, expDT)
+	newToken, err := ur.aService.GenerateToken(user, "session")
 	if err != nil {
 		return
 	}
@@ -198,8 +195,7 @@ func (ur *userRouter) GenerateAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user, err := ur.uService.UserFind(tokenData.ToUser())
-	expDT := time.Now().Add(time.Hour * 4380).Unix()
-	apiKey, err := auth.CreateToken(user, expDT)
+	apiKey, err := ur.aService.GenerateToken(user, "api")
 	if err != nil {
 		return
 	}
@@ -272,7 +268,11 @@ func (ur *userRouter) RegisterUser(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		} else {
-			w = utilities.SetResponseHeaders(w, "", "")
+			newToken, err := ur.aService.GenerateToken(u, "session")
+			if err != nil {
+				return
+			}
+			w = utilities.SetResponseHeaders(w, newToken, "")
 			w.WriteHeader(http.StatusCreated)
 			u.Password = ""
 			if err = json.NewEncoder(w).Encode(u); err != nil {

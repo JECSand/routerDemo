@@ -1,6 +1,10 @@
 package models
 
-import "time"
+import (
+	"errors"
+	"strings"
+	"time"
+)
 
 // User is a root struct that is used to store the json encoded data for/from a mongodb user doc.
 type User struct {
@@ -18,8 +22,58 @@ type User struct {
 	DeletedAt    time.Time `json:"deleted_at,omitempty"`
 }
 
-// Validate ...
-func (g *User) Validate() (err error) {
+// checkID determines whether a specified ID is set or not
+func (g *User) checkID(chkId string) bool {
+	switch chkId {
+	case "id":
+		if g.Id == "" || g.Id == "000000000000000000000000" {
+			return false
+		}
+	case "group_id":
+		if g.GroupId == "" || g.GroupId == "000000000000000000000000" {
+			return false
+		}
+	}
+	return true
+}
+
+// Validate a User for different scenarios such as loading TokenData, creating new User, or updating a User
+func (g *User) Validate(valCase string) (err error) {
+	var missingFields []string
+	switch valCase {
+	case "auth":
+		if !g.checkID("id") {
+			missingFields = append(missingFields, "id")
+		}
+		if !g.checkID("group_id") {
+			missingFields = append(missingFields, "group_id")
+		}
+		if g.Role == "" {
+			missingFields = append(missingFields, "role")
+		}
+	case "create":
+		if g.Username == "" {
+			missingFields = append(missingFields, "id")
+		}
+		if g.Email == "" {
+			missingFields = append(missingFields, "email")
+		}
+		if g.Password == "" {
+			missingFields = append(missingFields, "password")
+		}
+		if !g.checkID("group_id") {
+			missingFields = append(missingFields, "group_id")
+		}
+	case "update":
+		if !g.checkID("id") {
+			missingFields = append(missingFields, "id")
+		}
+	default:
+		return errors.New("unrecognized validation case")
+	}
+	if len(missingFields) > 0 {
+		return errors.New("missing the following user fields: " + strings.Join(missingFields, ", "))
+	}
 	return
 }
 
@@ -44,17 +98,3 @@ func (g *User) BuildUpdate(curUser *User) {
 		g.Role = curUser.Role
 	}
 }
-
-/*
-// UserService is an interface used to manage the relevant user doc controllers
-type UserService interface {
-	AuthenticateUser(u *User) (*User, error)
-	UpdatePassword(tokenData *TokenData, CurrentPassword string, newPassword string) (*User, error)
-	UserCreate(u *User) (*User, error)
-	UserDelete(u *User) (*User, error)
-	UsersFind(u *User) ([]*User, error)
-	UserFind(u *User) (*User, error)
-	UserUpdate(u *User) (*User, error)
-	UserDocInsert(u *User) (*User, error)
-}
-*/
