@@ -454,9 +454,9 @@ func (coll *testMongoCollection) FindOneAndDelete(ctx context.Context, filter in
 	filterDoc, err := coll.unmarshallBSON(filter)
 	if err == nil {
 		delDocs, err := coll.delete([]dbModel{filterDoc})
-		if err != nil && len(delDocs) > 0 {
+		if err == nil && len(delDocs) > 0 {
 			rawBson, err := delDocs[0].toDoc()
-			if err != nil {
+			if err == nil {
 				rawResult, err = bsonMarshall(rawBson)
 			}
 		}

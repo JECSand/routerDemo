@@ -34,6 +34,9 @@ func (p *GroupService) GroupCreate(g *models.Group) (*models.Group, error) {
 		return &models.Group{}, errors.New("group name exists")
 	}
 	gm, err = p.handler.InsertOne(gm)
+	if err != nil {
+		return g, err
+	}
 	return gm.toRoot(), err
 }
 
@@ -57,6 +60,9 @@ func (p *GroupService) GroupFind(g *models.Group) (*models.Group, error) {
 		return g, err
 	}
 	gm, err = p.handler.FindOne(gm)
+	if err != nil {
+		return g, err
+	}
 	return gm.toRoot(), err
 }
 
@@ -67,18 +73,24 @@ func (p *GroupService) GroupDelete(g *models.Group) (*models.Group, error) {
 		return g, err
 	}
 	gm, err = p.handler.DeleteOne(gm)
+	if err != nil {
+		return g, err
+	}
 	return gm.toRoot(), err
 }
 
 // GroupUpdate is used to update an existing group
 func (p *GroupService) GroupUpdate(g *models.Group) (*models.Group, error) {
 	var filter models.Group
-	if g.Id != "" && g.Id != "000000000000000000000000" {
-		filter.Id = g.Id
-	} else if g.Name != "" {
-		filter.Name = g.Name
-	} else {
+	if g.Id == "" || g.Id == "000000000000000000000000" {
 		return g, errors.New("group is missing a valid query filter")
+	}
+	filter.Id = g.Id
+	if g.Name != "" {
+		reDoc, err := p.handler.FindOne(&groupModel{Name: g.Name})
+		if err == nil && reDoc.toRoot().Id != filter.Id {
+			return g, errors.New("group name exists")
+		}
 	}
 	f, err := newGroupModel(&filter)
 	if err != nil {

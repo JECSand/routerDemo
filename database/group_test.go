@@ -116,3 +116,81 @@ func Test_GroupFind(t *testing.T) {
 		})
 	}
 }
+
+func Test_GroupUpdate(t *testing.T) {
+	// Defining our test slice. Each unit test should have the following properties:
+	tests := []struct {
+		name    string        // The name of the test
+		want    *models.Group // What out instance we want our function to return.
+		wantErr bool          // whether we want an error.
+		group   *models.Group
+	}{
+		// Here we're declaring each unit test input and output data as defined before
+		{
+			"update group name",
+			&models.Group{Id: "000000000000000000000002", Name: "test4"},
+			false,
+			&models.Group{Id: "000000000000000000000002", Name: "test4"},
+		},
+		{
+			"name taken",
+			&models.Group{Id: "000000000000000000000002", Name: "test3"},
+			true,
+			&models.Group{Id: "000000000000000000000002", Name: "test3"},
+		},
+	}
+	// Iterating over the previous test slice
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testService := setupTestFindGroups()
+			got, err := testService.GroupUpdate(tt.group)
+			// Checking the error
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GroupService.GroupUpdate() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got.Name != tt.want.Name { // Asserting whether we get the correct wanted value
+				t.Errorf("GroupService.GroupUpdate() = %v, want %v", got.Name, tt.want.Name)
+			}
+		})
+	}
+}
+
+func Test_GroupDelete(t *testing.T) {
+	// Defining our test slice. Each unit test should have the following properties:
+	tests := []struct {
+		name    string        // The name of the test
+		want    *models.Group // What out instance we want our function to return.
+		wantErr bool          // whether we want an error.
+		group   *models.Group
+	}{
+		// Here we're declaring each unit test input and output data as defined before
+		{
+			"success",
+			&models.Group{Id: "000000000000000000000002", Name: "test4"},
+			false,
+			&models.Group{Id: "000000000000000000000002"},
+		},
+		{
+			"group not found",
+			&models.Group{Id: "000000000000000000000004", Name: "test3"},
+			true,
+			&models.Group{Id: "000000000000000000000004"},
+		},
+	}
+	// Iterating over the previous test slice
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testService := setupTestFindGroups()
+			got, err := testService.GroupDelete(tt.group)
+			// Checking the error
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GroupService.GroupDelete() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got.Id != tt.want.Id { // Asserting whether we get the correct wanted value
+				t.Errorf("GroupService.GroupDelete() = %v, want %v", got.Id, tt.want.Id)
+			}
+		})
+	}
+}
