@@ -196,8 +196,8 @@ func (h *DBHandler[T]) FindMany(filter T) ([]T, error) {
 }
 
 // UpdateOne Function to update a dbModel from datasource with custom filter and update model
-func (h *DBHandler[T]) UpdateOne(m T) (T, error) {
-	f, err := m.bsonFilter()
+func (h *DBHandler[T]) UpdateOne(filter T, m T) (T, error) {
+	f, err := filter.bsonFilter()
 	if err != nil {
 		return m, err
 	}

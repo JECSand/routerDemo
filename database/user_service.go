@@ -123,8 +123,44 @@ func (p *UserService) UserFind(u *models.User) (*models.User, error) {
 	return um.toRoot(), err
 }
 
+/*
+// GroupUpdate is used to update an existing group
+func (p *GroupService) GroupUpdate(g *models.Group) (*models.Group, error) {
+	var filter models.Group
+	if g.Id != "" && g.Id != "000000000000000000000000" {
+		filter.Id = g.Id
+	} else if g.Name != "" {
+		filter.Name = g.Name
+	} else {
+		return g, errors.New("group is missing a valid query filter")
+	}
+	f, err := newGroupModel(&filter)
+	if err != nil {
+		return g, err
+	}
+	gm, err := newGroupModel(g)
+	if err != nil {
+		return g, err
+	}
+	_, groupErr := p.handler.FindOne(f)
+	if groupErr != nil {
+		return &models.Group{}, errors.New("group not found")
+	}
+	gm, err = p.handler.UpdateOne(f, gm)
+	return gm.toRoot(), err
+}
+*/
+
 // UserUpdate is used to update an existing user doc
 func (p *UserService) UserUpdate(u *models.User) (*models.User, error) {
+	var filter models.User
+	if u.Id != "" && u.Id != "000000000000000000000000" {
+		filter.Id = u.Id
+	} else if u.Email != "" {
+		filter.Email = u.Email
+	} else {
+		return u, errors.New("user is missing a valid query filter")
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	docCount, err := p.collection.CountDocuments(ctx, bson.M{})
@@ -134,25 +170,25 @@ func (p *UserService) UserUpdate(u *models.User) (*models.User, error) {
 	if docCount == 0 {
 		return &models.User{}, errors.New("no users found")
 	}
-	um, err := newUserModel(u)
+	f, err := newUserModel(&filter)
 	if err != nil {
 		return u, err
 	}
-	curUser, err := p.userHandler.FindOne(um)
+	curUser, err := p.userHandler.FindOne(f)
 	if err != nil {
 		return u, err
 	}
 	u.BuildUpdate(curUser.toRoot())
-	_, emailErr := p.userHandler.FindOne(&userModel{Email: um.Email})
+	um, err := newUserModel(u)
+	if err != nil {
+		return u, err
+	}
+	_, emailErr := p.userHandler.FindOne(&userModel{Email: f.Email})
 	_, groupErr := p.groupHandler.FindOne(&groupModel{Id: um.GroupId})
 	if emailErr == nil && curUser.Email != u.Email {
 		return &models.User{}, errors.New("email is taken")
 	} else if groupErr != nil {
 		return &models.User{}, errors.New("invalid group id")
-	}
-	um, err = newUserModel(u)
-	if err != nil {
-		return u, err
 	}
 	if len(u.Password) != 0 {
 		password := []byte(u.Password)
@@ -162,7 +198,7 @@ func (p *UserService) UserUpdate(u *models.User) (*models.User, error) {
 			return &models.User{}, err
 		}
 	}
-	um, err = p.userHandler.UpdateOne(um)
+	um, err = p.userHandler.UpdateOne(f, um)
 	return um.toRoot(), err
 }
 

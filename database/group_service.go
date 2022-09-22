@@ -72,15 +72,27 @@ func (p *GroupService) GroupDelete(g *models.Group) (*models.Group, error) {
 
 // GroupUpdate is used to update an existing group
 func (p *GroupService) GroupUpdate(g *models.Group) (*models.Group, error) {
+	var filter models.Group
+	if g.Id != "" && g.Id != "000000000000000000000000" {
+		filter.Id = g.Id
+	} else if g.Name != "" {
+		filter.Name = g.Name
+	} else {
+		return g, errors.New("group is missing a valid query filter")
+	}
+	f, err := newGroupModel(&filter)
+	if err != nil {
+		return g, err
+	}
 	gm, err := newGroupModel(g)
 	if err != nil {
 		return g, err
 	}
-	_, groupErr := p.handler.FindOne(gm)
+	_, groupErr := p.handler.FindOne(f)
 	if groupErr != nil {
 		return &models.Group{}, errors.New("group not found")
 	}
-	gm, err = p.handler.UpdateOne(gm)
+	gm, err = p.handler.UpdateOne(f, gm)
 	return gm.toRoot(), err
 }
 
