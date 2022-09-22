@@ -32,9 +32,9 @@ func Test_GroupCreate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			testService := initTestGroupService()
-			// fmt.Println("\n\nPRE CREATE: ", tt.group)
+			//fmt.Println("\n\nPRE CREATE: ", tt.group)
 			got, err := testService.GroupCreate(tt.group)
-			// fmt.Println("\nPOST CREATE: ", got)
+			//fmt.Println("\nPOST CREATE: ", got)
 			// Checking the error
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GroupService.GroupCreate() error = %v, wantErr %v", err, tt.wantErr)
@@ -72,7 +72,6 @@ func Test_GroupsFind(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			testService := setupTestFindGroups()
 			got, err := testService.GroupsFind()
-			// fmt.Println("\nPOST CREATE: ", got)
 			// Checking the error
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GroupService.GroupsFind() error = %v, wantErr %v", err, tt.wantErr)
@@ -80,6 +79,39 @@ func Test_GroupsFind(t *testing.T) {
 			}
 			if len(got) != tt.want { // Asserting whether we get the correct wanted value
 				t.Errorf("GroupService.GroupsFind() = %v, want %v", len(got), tt.want)
+			}
+		})
+	}
+}
+
+func Test_GroupFind(t *testing.T) {
+	// Defining our test slice. Each unit test should have the following properties:
+	tests := []struct {
+		name    string        // The name of the test
+		want    *models.Group // What out instance we want our function to return.
+		wantErr bool          // whether we want an error.
+		group   *models.Group
+	}{
+		// Here we're declaring each unit test input and output data as defined before
+		{
+			"find by id",
+			&models.Group{Id: "000000000000000000000002", Name: "test2", RootAdmin: false},
+			false,
+			&models.Group{Id: "000000000000000000000002"},
+		},
+	}
+	// Iterating over the previous test slice
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testService := setupTestFindGroups()
+			got, err := testService.GroupFind(tt.group)
+			// Checking the error
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GroupService.GroupFind() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got.Id != tt.want.Id { // Asserting whether we get the correct wanted value
+				t.Errorf("GroupService.GroupFind() = %v, want %v", got.Id, tt.want.Id)
 			}
 		})
 	}

@@ -87,6 +87,7 @@ func bsonUnmarshall(colName string, bsonData interface{}) (data dbModel, err err
 		err = bson.Unmarshal(bData, &bm)
 		return &bm, nil
 	}
+	// fmt.Println("\nCHECK bsonUnmarshall NAME: ", colName)
 	return nil, errors.New("invalid test collection type")
 }
 
@@ -110,6 +111,8 @@ func getTestGroupModels(root bool) []*groupModel {
 
 func initTestGroupService() *GroupService {
 	os.Setenv("ENV", "test")
+	os.Setenv("MONGO_URI", "mongodb+srv://in_mem")
+	os.Setenv("DATABASE", "test")
 	db, _ := initializeNewTestClient()
 	collection := db.GetCollection("groups")
 	gHandler := db.NewGroupHandler()
@@ -122,6 +125,9 @@ func initTestGroupService() *GroupService {
 
 func setupTestFindGroups() *GroupService {
 	os.Setenv("ENV", "test")
+	os.Setenv("MONGO_URI", "mongodb+srv://in_mem")
+	os.Setenv("MONGO_URI", "mongodb+srv://in_mem")
+	os.Setenv("DATABASE", "test")
 	db, _ := initializeNewTestClient()
 	collection := db.GetCollection("groups")
 	gHandler := db.NewGroupHandler()
@@ -176,7 +182,7 @@ func (b *testCursorData) toDoc() (doc bson.D, err error) {
 ================ testMongoCursor ==================
 */
 
-// testMongoCollection
+// testMongoCursor ...
 type testMongoCursor struct {
 	ctx      context.Context
 	Results  []byte
@@ -251,7 +257,7 @@ type testMongoCollection struct {
 // newTestMongoCollection
 func newTestMongoCollection(name string) (*testMongoCollection, error) {
 	if name == "" {
-		return &testMongoCollection{}, errors.New("invalid test collection name")
+		return nil, errors.New("invalid test collection name")
 	}
 	testUserCollection := &testMongoCollection{name: name, docs: []dbModel{}}
 	return testUserCollection, nil
@@ -345,7 +351,12 @@ func (coll *testMongoCollection) find(dbDoc dbModel) (reDocs []dbModel, err erro
 			if bErr != nil {
 				return reDocs, bErr
 			}
-			match := doc.match(bsonData)
+			match := false
+			if len(bsonData) == 0 {
+				match = true
+			} else {
+				match = doc.match(bsonData)
+			}
 			if match {
 				reDocs = append(reDocs, doc)
 			}
@@ -365,6 +376,7 @@ func (coll *testMongoCollection) insert(dbDocs []dbModel) (err error) {
 		}
 		_, fErr := coll.findById(docId)
 		if fErr != nil {
+			// fmt.Println("----------------> CHECK THIS ERROR: ", fErr.Error())
 			valDocs = append(valDocs, dbDoc)
 		}
 	}
@@ -489,7 +501,7 @@ func (coll *testMongoCollection) Find(ctx context.Context, filter interface{}, o
 	coll.ctx = ctx
 	fmt.Println(filter, opts)
 	filterDoc, err := coll.unmarshallBSON(filter)
-	if err == nil {
+	if err != nil {
 		return nil, err
 	}
 	reDocs, err := coll.find(filterDoc)
@@ -507,20 +519,25 @@ func (coll *testMongoCollection) Find(ctx context.Context, filter interface{}, o
 func (coll *testMongoCollection) FindOne(ctx context.Context, filter interface{}, opts ...*options.FindOneOptions) *mongo.SingleResult {
 	var rawResult []byte
 	coll.ctx = ctx
-	fmt.Println(filter, opts)
 	filterDoc, err := coll.unmarshallBSON(filter)
 	if err == nil {
 		reDocs, err := coll.find(filterDoc)
-		if err != nil && len(reDocs) > 0 {
+		if err == nil && len(reDocs) > 0 {
 			rawBson, err := reDocs[0].toDoc()
-			if err != nil {
+			if err == nil {
 				rawResult, err = bsonMarshall(rawBson)
+				if err != nil {
+					fmt.Print("CHECK THIS ERROR: ", err.Error())
+				}
 			}
 		}
 	}
-	doc, err := bsonx.ReadDoc(rawResult)
-	res := mongo.NewSingleResultFromDocument(doc, err, nil)
-	return res
+	if len(rawResult) == 0 {
+		err = errors.New("document not found")
+		return mongo.NewSingleResultFromDocument(nil, err, nil)
+	}
+	doc, _ := bsonx.ReadDoc(rawResult)
+	return mongo.NewSingleResultFromDocument(doc, err, nil)
 }
 
 // CountDocuments in test mongodb collection
@@ -559,16 +576,19 @@ func newTestMongoDatabase(databaseName string) (*testMongoDatabase, error) {
 	var testsColls []*testMongoCollection
 	testUserCollection, err := newTestMongoCollection("users")
 	if err != nil {
+		fmt.Println("\nCOLLECTION INIT USER ERROR: ", err.Error())
 		return &testMongoDatabase{}, err
 	}
 	testsColls = append(testsColls, testUserCollection)
 	testGroupCollection, err := newTestMongoCollection("groups")
 	if err != nil {
+		fmt.Println("\nCOLLECTION INIT GROUP ERROR: ", err.Error())
 		return &testMongoDatabase{}, err
 	}
 	testsColls = append(testsColls, testGroupCollection)
 	testBlacklistCollection, err := newTestMongoCollection("blacklists")
 	if err != nil {
+		fmt.Println("\nCOLLECTION INIT BLACKLIST ERROR: ", err.Error())
 		return &testMongoDatabase{}, err
 	}
 	testsColls = append(testsColls, testBlacklistCollection)
@@ -579,13 +599,13 @@ func newTestMongoDatabase(databaseName string) (*testMongoDatabase, error) {
 }
 
 // Collection returns a test collection from the test client
-func (c *testMongoDatabase) Collection(dbName string) *testMongoCollection {
+func (c *testMongoDatabase) Collection(colName string) *testMongoCollection {
 	for _, tColl := range c.testCollections {
-		if tColl.name == dbName {
+		if tColl.name == colName {
 			return tColl
 		}
 	}
-	return &testMongoCollection{}
+	return nil
 }
 
 /*
@@ -602,12 +622,12 @@ type testMongoClient struct {
 // newTestMongoClient
 func newTestMongoClient(connectionURI string) (*testMongoClient, error) {
 	if connectionURI == "" {
-		return &testMongoClient{}, errors.New("invalid test connection uri")
+		return nil, errors.New("invalid test connection uri")
 	}
 	var testDBs []*testMongoDatabase
-	testMongoDB, err := newTestMongoDatabase("testDB")
+	testMongoDB, err := newTestMongoDatabase("test")
 	if err != nil {
-		return &testMongoClient{}, err
+		return nil, err
 	}
 	testDBs = append(testDBs, testMongoDB)
 	return &testMongoClient{
@@ -642,7 +662,7 @@ func (c *testMongoClient) Database(dbName string) *testMongoDatabase {
 			return tDB
 		}
 	}
-	return &testMongoDatabase{}
+	return nil
 }
 
 // Ping the in-memory text mongo db
@@ -667,6 +687,9 @@ func initializeNewTestClient() (*testDBClient, error) {
 	newDBClient := testDBClient{connectionURI: os.Getenv("MONGO_URI")}
 	var err error
 	newDBClient.client, err = newTestMongoClient(newDBClient.connectionURI)
+	if err != nil {
+		panic(err.Error())
+	}
 	return &newDBClient, err
 }
 

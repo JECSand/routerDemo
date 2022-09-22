@@ -29,7 +29,7 @@ func (p *GroupService) GroupCreate(g *models.Group) (*models.Group, error) {
 	if err != nil {
 		return g, err
 	}
-	_, err = p.handler.FindOne(gm)
+	_, err = p.handler.FindOne(&groupModel{Name: gm.Name})
 	if err == nil {
 		return &models.Group{}, errors.New("group name exists")
 	}

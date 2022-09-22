@@ -74,18 +74,6 @@ func (g *groupModel) match(doc interface{}) bool {
 	if g.Name == gm.Name {
 		return true
 	}
-	if g.RootAdmin == gm.RootAdmin {
-		return true
-	}
-	if g.LastModified == gm.LastModified {
-		return true
-	}
-	if g.CreatedAt == gm.CreatedAt {
-		return true
-	}
-	if g.DeletedAt == gm.DeletedAt {
-		return true
-	}
 	return false
 }
 
@@ -133,6 +121,9 @@ func (g *groupModel) toDoc() (doc bson.D, err error) {
 func (g *groupModel) bsonFilter() (doc bson.D, err error) {
 	if g.Id.Hex() != "" && g.Id.Hex() != "000000000000000000000000" {
 		doc = bson.D{{"_id", g.Id}}
+	}
+	if g.Name != "" {
+		doc = bson.D{{"name", g.Name}}
 	}
 	return
 }
