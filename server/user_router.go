@@ -45,13 +45,16 @@ func NewUserRouter(router *mux.Router, a *services.TokenService, u services.User
 func (ur *userRouter) UpdatePassword(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(io.LimitReader(r.Body, 1048576))
 	if err != nil {
+		utilities.RespondWithError(w, http.StatusBadRequest, utilities.JWTError{Message: err.Error()})
 		return
 	}
 	if err = r.Body.Close(); err != nil {
+		utilities.RespondWithError(w, http.StatusBadRequest, utilities.JWTError{Message: err.Error()})
 		return
 	}
 	decodedToken, err := auth.DecodeJWT(r.Header.Get("Auth-Token"))
 	if err != nil {
+		utilities.RespondWithError(w, http.StatusUnauthorized, utilities.JWTError{Message: err.Error()})
 		return
 	}
 	type passwordStruct struct {
@@ -61,15 +64,12 @@ func (ur *userRouter) UpdatePassword(w http.ResponseWriter, r *http.Request) {
 	var pw passwordStruct
 	err = json.Unmarshal(body, &pw)
 	if err != nil {
+		utilities.RespondWithError(w, http.StatusBadRequest, utilities.JWTError{Message: err.Error()})
 		return
 	}
 	u, err := ur.uService.UpdatePassword(decodedToken.ToUser(), pw.CurrentPassword, pw.NewPassword)
 	if err != nil {
-		w = utilities.SetResponseHeaders(w, "", "")
-		w.WriteHeader(403)
-		if err = json.NewEncoder(w).Encode(utilities.JsonErr{Code: http.StatusForbidden, Text: err.Error()}); err != nil {
-			return
-		}
+		utilities.RespondWithError(w, http.StatusUnauthorized, utilities.JWTError{Message: err.Error()})
 		return
 	} else {
 		w = utilities.SetResponseHeaders(w, "", "")
@@ -90,20 +90,22 @@ func (ur *userRouter) ModifyUser(w http.ResponseWriter, r *http.Request) {
 	user.Id = userId
 	body, err := io.ReadAll(io.LimitReader(r.Body, 1048576))
 	if err != nil {
+		utilities.RespondWithError(w, http.StatusBadRequest, utilities.JWTError{Message: err.Error()})
 		return
 	}
 	if err = r.Body.Close(); err != nil {
+		utilities.RespondWithError(w, http.StatusBadRequest, utilities.JWTError{Message: err.Error()})
 		return
 	}
 	if err = json.Unmarshal(body, &user); err != nil {
-		w = utilities.SetResponseHeaders(w, "", "")
-		w.WriteHeader(422)
-		if err = json.NewEncoder(w).Encode(err); err != nil {
-			return
-		}
+		utilities.RespondWithError(w, http.StatusBadRequest, utilities.JWTError{Message: err.Error()})
 		return
 	}
 	decodedToken, err := auth.DecodeJWT(r.Header.Get("Auth-Token"))
+	if err != nil {
+		utilities.RespondWithError(w, http.StatusUnauthorized, utilities.JWTError{Message: err.Error()})
+		return
+	}
 	groupId := decodedToken.AdminRouteRoleCheck()
 	if groupId != "" { // Force Scope the groupId to the groupId of the Token if user is not RootAdmin
 		user.GroupId = groupId
@@ -111,11 +113,7 @@ func (ur *userRouter) ModifyUser(w http.ResponseWriter, r *http.Request) {
 	}
 	u, err := ur.uService.UserUpdate(&user)
 	if err != nil {
-		w = utilities.SetResponseHeaders(w, "", "")
-		w.WriteHeader(http.StatusForbidden)
-		if err = json.NewEncoder(w).Encode(utilities.JsonErr{Code: http.StatusForbidden, Text: err.Error()}); err != nil {
-			return
-		}
+		utilities.RespondWithError(w, http.StatusBadRequest, utilities.JWTError{Message: err.Error()})
 		return
 	} else {
 		w = utilities.SetResponseHeaders(w, "", "")
@@ -132,30 +130,25 @@ func (ur *userRouter) Signin(w http.ResponseWriter, r *http.Request) {
 	var user models.User
 	body, err := io.ReadAll(io.LimitReader(r.Body, 1048576))
 	if err != nil {
+		utilities.RespondWithError(w, http.StatusBadRequest, utilities.JWTError{Message: err.Error()})
 		return
 	}
 	if err = r.Body.Close(); err != nil {
+		utilities.RespondWithError(w, http.StatusBadRequest, utilities.JWTError{Message: err.Error()})
 		return
 	}
 	if err = json.Unmarshal(body, &user); err != nil {
-		w = utilities.SetResponseHeaders(w, "", "")
-		w.WriteHeader(422)
-		if err = json.NewEncoder(w).Encode(err); err != nil {
-			return
-		}
+		utilities.RespondWithError(w, http.StatusBadRequest, utilities.JWTError{Message: err.Error()})
 		return
 	}
 	u, err := ur.uService.AuthenticateUser(&user)
 	if err != nil {
-		w = utilities.SetResponseHeaders(w, "", "")
-		w.WriteHeader(401)
-		if err = json.NewEncoder(w).Encode(utilities.JsonErr{Code: http.StatusUnauthorized, Text: err.Error()}); err != nil {
-			return
-		}
+		utilities.RespondWithError(w, http.StatusUnauthorized, utilities.JWTError{Message: err.Error()})
 		return
 	} else {
 		sessionToken, err := ur.aService.GenerateToken(u, "session")
 		if err != nil {
+			utilities.RespondWithError(w, http.StatusUnauthorized, utilities.JWTError{Message: err.Error()})
 			return
 		}
 		w = utilities.SetResponseHeaders(w, sessionToken, "")
@@ -173,18 +166,22 @@ func (ur *userRouter) RefreshSession(w http.ResponseWriter, r *http.Request) {
 	authToken := r.Header.Get("Auth-Token")
 	tokenData, err := auth.DecodeJWT(authToken)
 	if err != nil {
+		utilities.RespondWithError(w, http.StatusUnauthorized, utilities.JWTError{Message: err.Error()})
 		return
 	}
 	user, err := ur.uService.UserFind(tokenData.ToUser())
 	if err != nil {
+		utilities.RespondWithError(w, http.StatusUnauthorized, utilities.JWTError{Message: err.Error()})
 		return
 	}
 	newToken, err := ur.aService.GenerateToken(user, "session")
 	if err != nil {
+		utilities.RespondWithError(w, http.StatusBadRequest, utilities.JWTError{Message: err.Error()})
 		return
 	}
 	w = utilities.SetResponseHeaders(w, newToken, "")
 	w.WriteHeader(http.StatusOK)
+	return
 }
 
 // GenerateAPIKey is the handler function that generates 6 month API Key for a given user
@@ -192,11 +189,17 @@ func (ur *userRouter) GenerateAPIKey(w http.ResponseWriter, r *http.Request) {
 	authToken := r.Header.Get("Auth-Token")
 	tokenData, err := auth.DecodeJWT(authToken)
 	if err != nil {
+		utilities.RespondWithError(w, http.StatusUnauthorized, utilities.JWTError{Message: err.Error()})
 		return
 	}
 	user, err := ur.uService.UserFind(tokenData.ToUser())
+	if err != nil {
+		utilities.RespondWithError(w, http.StatusUnauthorized, utilities.JWTError{Message: err.Error()})
+		return
+	}
 	apiKey, err := ur.aService.GenerateToken(user, "api")
 	if err != nil {
+		utilities.RespondWithError(w, http.StatusBadRequest, utilities.JWTError{Message: err.Error()})
 		return
 	}
 	w = utilities.SetResponseHeaders(w, "", apiKey)
@@ -209,6 +212,7 @@ func (ur *userRouter) Signout(w http.ResponseWriter, r *http.Request) {
 	authToken := r.Header.Get("Auth-Token")
 	err := ur.aService.BlacklistAuthToken(authToken)
 	if err != nil {
+		utilities.RespondWithError(w, http.StatusUnauthorized, utilities.JWTError{Message: err.Error()})
 		return
 	}
 	w = utilities.SetResponseHeaders(w, "", "")
@@ -219,27 +223,21 @@ func (ur *userRouter) Signout(w http.ResponseWriter, r *http.Request) {
 // RegisterUser handler function that registers a new user
 func (ur *userRouter) RegisterUser(w http.ResponseWriter, r *http.Request) {
 	if os.Getenv("REGISTRATION") == "OFF" {
-		w = utilities.SetResponseHeaders(w, "", "")
-		w.WriteHeader(404)
-		if err := json.NewEncoder(w).Encode(utilities.JsonErr{Code: 404, Text: "Not Found"}); err != nil {
-			return
-		}
+		utilities.RespondWithError(w, http.StatusNotFound, utilities.JWTError{Message: "Not Found"})
 		return
 	} else {
 		var user models.User
 		body, err := io.ReadAll(io.LimitReader(r.Body, 1048576))
 		if err != nil {
+			utilities.RespondWithError(w, http.StatusBadRequest, utilities.JWTError{Message: err.Error()})
 			return
 		}
 		if err = r.Body.Close(); err != nil {
+			utilities.RespondWithError(w, http.StatusBadRequest, utilities.JWTError{Message: err.Error()})
 			return
 		}
 		if err = json.Unmarshal(body, &user); err != nil {
-			w = utilities.SetResponseHeaders(w, "", "")
-			w.WriteHeader(422)
-			if err = json.NewEncoder(w).Encode(err); err != nil {
-				return
-			}
+			utilities.RespondWithError(w, http.StatusBadRequest, utilities.JWTError{Message: err.Error()})
 			return
 		}
 		var group models.Group
@@ -250,26 +248,19 @@ func (ur *userRouter) RegisterUser(w http.ResponseWriter, r *http.Request) {
 		group.RootAdmin = false
 		g, err := ur.gService.GroupCreate(&group)
 		if err != nil {
-			w = utilities.SetResponseHeaders(w, "", "")
-			w.WriteHeader(403)
-			if err = json.NewEncoder(w).Encode(utilities.JsonErr{Code: http.StatusForbidden, Text: err.Error()}); err != nil {
-				return
-			}
+			utilities.RespondWithError(w, http.StatusBadRequest, utilities.JWTError{Message: err.Error()})
 			return
 		}
 		user.Role = "admin"
 		user.GroupId = g.Id
 		u, err := ur.uService.UserCreate(&user)
 		if err != nil {
-			w = utilities.SetResponseHeaders(w, "", "")
-			w.WriteHeader(403)
-			if err = json.NewEncoder(w).Encode(utilities.JsonErr{Code: http.StatusForbidden, Text: err.Error()}); err != nil {
-				return
-			}
+			utilities.RespondWithError(w, http.StatusBadRequest, utilities.JWTError{Message: err.Error()})
 			return
 		} else {
 			newToken, err := ur.aService.GenerateToken(u, "session")
 			if err != nil {
+				utilities.RespondWithError(w, http.StatusUnauthorized, utilities.JWTError{Message: err.Error()})
 				return
 			}
 			w = utilities.SetResponseHeaders(w, newToken, "")
@@ -288,21 +279,20 @@ func (ur *userRouter) CreateUser(w http.ResponseWriter, r *http.Request) {
 	var user models.User
 	body, err := io.ReadAll(io.LimitReader(r.Body, 1048576))
 	if err != nil {
+		utilities.RespondWithError(w, http.StatusBadRequest, utilities.JWTError{Message: err.Error()})
 		return
 	}
 	if err = r.Body.Close(); err != nil {
+		utilities.RespondWithError(w, http.StatusBadRequest, utilities.JWTError{Message: err.Error()})
 		return
 	}
 	if err = json.Unmarshal(body, &user); err != nil {
-		w = utilities.SetResponseHeaders(w, "", "")
-		w.WriteHeader(422)
-		if err = json.NewEncoder(w).Encode(err); err != nil {
-			return
-		}
+		utilities.RespondWithError(w, http.StatusBadRequest, utilities.JWTError{Message: err.Error()})
 		return
 	}
 	decodedToken, err := auth.DecodeJWT(r.Header.Get("Auth-Token"))
 	if err != nil {
+		utilities.RespondWithError(w, http.StatusUnauthorized, utilities.JWTError{Message: err.Error()})
 		return
 	}
 	groupId := decodedToken.AdminRouteRoleCheck()
@@ -312,11 +302,7 @@ func (ur *userRouter) CreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	u, err := ur.uService.UserCreate(&user)
 	if err != nil {
-		w = utilities.SetResponseHeaders(w, "", "")
-		w.WriteHeader(403)
-		if err = json.NewEncoder(w).Encode(utilities.JsonErr{Code: http.StatusForbidden, Text: err.Error()}); err != nil {
-			return
-		}
+		utilities.RespondWithError(w, http.StatusBadRequest, utilities.JWTError{Message: err.Error()})
 		return
 	} else {
 		w = utilities.SetResponseHeaders(w, "", "")
@@ -333,12 +319,17 @@ func (ur *userRouter) CreateUser(w http.ResponseWriter, r *http.Request) {
 func (ur *userRouter) UsersShow(w http.ResponseWriter, r *http.Request) {
 	decodedToken, err := auth.DecodeJWT(r.Header.Get("Auth-Token"))
 	if err != nil {
+		utilities.RespondWithError(w, http.StatusUnauthorized, utilities.JWTError{Message: err.Error()})
 		return
 	}
 	groupId := decodedToken.AdminRouteRoleCheck()
 	w = utilities.SetResponseHeaders(w, "", "")
 	w.WriteHeader(http.StatusOK)
 	users, err := ur.uService.UsersFind(&models.User{GroupId: groupId})
+	if err != nil {
+		utilities.RespondWithError(w, http.StatusBadRequest, utilities.JWTError{Message: err.Error()})
+		return
+	}
 	if err = json.NewEncoder(w).Encode(users); err != nil {
 		return
 	}
@@ -349,6 +340,10 @@ func (ur *userRouter) UsersShow(w http.ResponseWriter, r *http.Request) {
 func (ur *userRouter) UserShow(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	userId := vars["userId"]
+	if userId == "" {
+		utilities.RespondWithError(w, http.StatusBadRequest, utilities.JWTError{Message: "missing userId"})
+		return
+	}
 	decodedToken, err := auth.DecodeJWT(r.Header.Get("Auth-Token"))
 	if err != nil {
 		return
@@ -356,11 +351,7 @@ func (ur *userRouter) UserShow(w http.ResponseWriter, r *http.Request) {
 	groupId := decodedToken.AdminRouteRoleCheck()
 	user, err := ur.uService.UserFind(&models.User{Id: userId, GroupId: groupId})
 	if err != nil {
-		w = utilities.SetResponseHeaders(w, "", "")
-		w.WriteHeader(http.StatusNotFound)
-		if err = json.NewEncoder(w).Encode(utilities.JsonErr{Code: http.StatusNotFound, Text: err.Error()}); err != nil {
-			return
-		}
+		utilities.RespondWithError(w, http.StatusNotFound, utilities.JWTError{Message: err.Error()})
 		return
 	}
 	user.Password = ""
@@ -376,18 +367,19 @@ func (ur *userRouter) UserShow(w http.ResponseWriter, r *http.Request) {
 func (ur *userRouter) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	userId := vars["userId"]
+	if userId == "" {
+		utilities.RespondWithError(w, http.StatusBadRequest, utilities.JWTError{Message: "missing userId"})
+		return
+	}
 	decodedToken, err := auth.DecodeJWT(r.Header.Get("Auth-Token"))
 	if err != nil {
+		utilities.RespondWithError(w, http.StatusUnauthorized, utilities.JWTError{Message: err.Error()})
 		return
 	}
 	groupId := decodedToken.AdminRouteRoleCheck()
 	user, err := ur.uService.UserDelete(&models.User{Id: userId, GroupId: groupId})
 	if err != nil {
-		w = utilities.SetResponseHeaders(w, "", "")
-		w.WriteHeader(http.StatusNotFound)
-		if err = json.NewEncoder(w).Encode(utilities.JsonErr{Code: http.StatusNotFound, Text: err.Error()}); err != nil {
-			return
-		}
+		utilities.RespondWithError(w, http.StatusNotFound, utilities.JWTError{Message: err.Error()})
 		return
 	}
 	if user.Id != "" {

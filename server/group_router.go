@@ -35,6 +35,7 @@ func (gr *groupRouter) GroupsShow(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	groups, err := gr.gService.GroupsFind()
 	if err != nil {
+		utilities.RespondWithError(w, http.StatusServiceUnavailable, utilities.JWTError{Message: err.Error()})
 		return
 	}
 	if err = json.NewEncoder(w).Encode(groups); err != nil {
@@ -47,28 +48,22 @@ func (gr *groupRouter) CreateGroup(w http.ResponseWriter, r *http.Request) {
 	var group models.Group
 	body, err := io.ReadAll(io.LimitReader(r.Body, 1048576))
 	if err != nil {
+		utilities.RespondWithError(w, http.StatusBadRequest, utilities.JWTError{Message: err.Error()})
 		return
 	}
 	if err = r.Body.Close(); err != nil {
+		utilities.RespondWithError(w, http.StatusBadRequest, utilities.JWTError{Message: err.Error()})
 		return
 	}
 	if err = json.Unmarshal(body, &group); err != nil {
-		w = utilities.SetResponseHeaders(w, "", "")
-		w.WriteHeader(422)
-		if err = json.NewEncoder(w).Encode(err); err != nil {
-			return
-		}
+		utilities.RespondWithError(w, http.StatusBadRequest, utilities.JWTError{Message: err.Error()})
 		return
 	}
 	group.Id = utilities.GenerateObjectID()
 	group.RootAdmin = false
 	g, err := gr.gService.GroupCreate(&group)
 	if err != nil {
-		w = utilities.SetResponseHeaders(w, "", "")
-		w.WriteHeader(403)
-		if err = json.NewEncoder(w).Encode(utilities.JsonErr{Code: http.StatusForbidden, Text: err.Error()}); err != nil {
-			return
-		}
+		utilities.RespondWithError(w, http.StatusServiceUnavailable, utilities.JWTError{Message: err.Error()})
 		return
 	} else {
 		w = utilities.SetResponseHeaders(w, "", "")
@@ -86,27 +81,21 @@ func (gr *groupRouter) ModifyGroup(w http.ResponseWriter, r *http.Request) {
 	var group models.Group
 	body, err := io.ReadAll(io.LimitReader(r.Body, 1048576))
 	if err != nil {
+		utilities.RespondWithError(w, http.StatusBadRequest, utilities.JWTError{Message: err.Error()})
 		return
 	}
 	if err = r.Body.Close(); err != nil {
+		utilities.RespondWithError(w, http.StatusBadRequest, utilities.JWTError{Message: err.Error()})
 		return
 	}
 	if err = json.Unmarshal(body, &group); err != nil {
-		w = utilities.SetResponseHeaders(w, "", "")
-		w.WriteHeader(422)
-		if err = json.NewEncoder(w).Encode(err); err != nil {
-			return
-		}
+		utilities.RespondWithError(w, http.StatusBadRequest, utilities.JWTError{Message: err.Error()})
 		return
 	}
 	group.Id = groupId
 	g, err := gr.gService.GroupUpdate(&group)
 	if err != nil {
-		w = utilities.SetResponseHeaders(w, "", "")
-		w.WriteHeader(404)
-		if err = json.NewEncoder(w).Encode(utilities.JsonErr{Code: http.StatusNotFound, Text: "Group Not Found"}); err != nil {
-			return
-		}
+		utilities.RespondWithError(w, http.StatusServiceUnavailable, utilities.JWTError{Message: err.Error()})
 		return
 	} else {
 		w = utilities.SetResponseHeaders(w, "", "")
@@ -121,13 +110,13 @@ func (gr *groupRouter) ModifyGroup(w http.ResponseWriter, r *http.Request) {
 func (gr *groupRouter) GroupShow(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	groupId := vars["groupId"]
+	if groupId == "" {
+		utilities.RespondWithError(w, http.StatusBadRequest, utilities.JWTError{Message: "missing groupId"})
+		return
+	}
 	group, err := gr.gService.GroupFind(&models.Group{Id: groupId})
 	if err != nil {
-		w = utilities.SetResponseHeaders(w, "", "")
-		w.WriteHeader(http.StatusNotFound)
-		if err = json.NewEncoder(w).Encode(utilities.JsonErr{Code: http.StatusNotFound, Text: "Group Not Found"}); err != nil {
-			return
-		}
+		utilities.RespondWithError(w, http.StatusNotFound, utilities.JWTError{Message: err.Error()})
 		return
 	}
 	w = utilities.SetResponseHeaders(w, "", "")
@@ -142,13 +131,13 @@ func (gr *groupRouter) GroupShow(w http.ResponseWriter, r *http.Request) {
 func (gr *groupRouter) DeleteGroup(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	groupId := vars["groupId"]
+	if groupId == "" {
+		utilities.RespondWithError(w, http.StatusBadRequest, utilities.JWTError{Message: "missing groupId"})
+		return
+	}
 	group, err := gr.gService.GroupDelete(&models.Group{Id: groupId})
 	if err != nil {
-		w = utilities.SetResponseHeaders(w, "", "")
-		w.WriteHeader(http.StatusNotFound)
-		if err = json.NewEncoder(w).Encode(utilities.JsonErr{Code: http.StatusNotFound, Text: "Group Not Found"}); err != nil {
-			return
-		}
+		utilities.RespondWithError(w, http.StatusNotFound, utilities.JWTError{Message: err.Error()})
 		return
 	}
 	w = utilities.SetResponseHeaders(w, "", "")

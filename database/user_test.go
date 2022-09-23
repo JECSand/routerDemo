@@ -268,8 +268,10 @@ func Test_UserUpdate(t *testing.T) {
 			case "update user group", "update user email":
 				if got.Email != tt.want.Email { // Asserting whether we get the correct wanted value
 					failMsg = fmt.Sprintf("UserService.UserUpdate() = %v, want %v", got.Email, tt.want.Email)
-					t.Errorf(failMsg)
 				}
+			}
+			if failMsg != "" {
+				t.Errorf(failMsg)
 			}
 		})
 	}

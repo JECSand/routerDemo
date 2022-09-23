@@ -32,6 +32,7 @@ type DBClient interface {
 	NewUserHandler() *DBHandler[*userModel]
 	NewGroupHandler() *DBHandler[*groupModel]
 	NewBlacklistHandler() *DBHandler[*blacklistModel]
+	NewTaskHandler() *DBHandler[*taskModel]
 }
 
 // DBCursor is an abstraction of the dbClient and testDBClient types
@@ -136,6 +137,15 @@ func (db *dbClient) NewGroupHandler() *DBHandler[*groupModel] {
 func (db *dbClient) NewBlacklistHandler() *DBHandler[*blacklistModel] {
 	col := db.GetCollection("blacklists")
 	return &DBHandler[*blacklistModel]{
+		db:         db,
+		collection: col,
+	}
+}
+
+// NewTaskHandler returns a new DBHandler task interface
+func (db *dbClient) NewTaskHandler() *DBHandler[*taskModel] {
+	col := db.GetCollection("tasks")
+	return &DBHandler[*taskModel]{
 		db:         db,
 		collection: col,
 	}

@@ -86,6 +86,14 @@ func bsonUnmarshall(colName string, bsonData interface{}) (data dbModel, err err
 		bm := blacklistModel{}
 		err = bson.Unmarshal(bData, &bm)
 		return &bm, nil
+	case "tasks":
+		bData, err := bsonMarshall(bsonData)
+		if err != nil {
+			return nil, err
+		}
+		tm := taskModel{}
+		err = bson.Unmarshal(bData, &tm)
+		return &tm, nil
 	}
 	// fmt.Println("\nCHECK bsonUnmarshall NAME: ", colName)
 	return nil, errors.New("invalid test collection type")
@@ -156,11 +164,135 @@ func getTestUsersModels(root bool) []*userModel {
 	return gms
 }
 
+func getTestTasksModels() []*taskModel {
+	var gms []*taskModel
+	var gm *taskModel
+	gm, _ = newTaskModel(&models.Task{
+		Id:      "000000000000000000000022",
+		Name:    "Task1",
+		Due:     time.Now().UTC(),
+		UserId:  "000000000000000000000013",
+		GroupId: "000000000000000000000002",
+	})
+	gms = append(gms, gm)
+	gm, _ = newTaskModel(&models.Task{
+		Id:      "000000000000000000000023",
+		Name:    "Task2",
+		Due:     time.Now().UTC(),
+		UserId:  "000000000000000000000012",
+		GroupId: "000000000000000000000002",
+	})
+	gms = append(gms, gm)
+	return gms
+}
+
 func getTestTokens() []string {
 	return []string{
 		"123445608654321",
 		"123445678654321",
 	}
+}
+
+/*
+================ testTasksUtils ==================
+*/
+
+func initTestTaskService() *TaskService {
+	os.Setenv("ENV", "test")
+	os.Setenv("MONGO_URI", "mongodb+srv://in_mem")
+	os.Setenv("DATABASE", "test")
+	db, _ := initializeNewTestClient()
+	gCollection := db.GetCollection("groups")
+	gHandler := db.NewGroupHandler()
+	gs := &GroupService{
+		gCollection,
+		db,
+		gHandler,
+	}
+	tg := getTestGroupModels(true)
+	for _, d := range tg {
+		_, err := gs.GroupCreate(d.toRoot())
+		if err != nil {
+			panic(err)
+		}
+	}
+	uCollection := db.GetCollection("users")
+	uHandler := db.NewUserHandler()
+	us := &UserService{
+		uCollection,
+		db,
+		uHandler,
+		gHandler,
+	}
+	tu := getTestUsersModels(true)
+	for _, d := range tu {
+		_, err := us.UserCreate(d.toRoot())
+		if err != nil {
+			panic(err)
+		}
+	}
+	collection := db.GetCollection("tasks")
+	tHandler := db.NewTaskHandler()
+	return &TaskService{
+		collection,
+		db,
+		tHandler,
+		uHandler,
+		gHandler,
+	}
+}
+
+func setupTestTasks() *TaskService {
+	os.Setenv("ENV", "test")
+	os.Setenv("MONGO_URI", "mongodb+srv://in_mem")
+	os.Setenv("DATABASE", "test")
+	db, _ := initializeNewTestClient()
+	gCollection := db.GetCollection("groups")
+	gHandler := db.NewGroupHandler()
+	gs := &GroupService{
+		gCollection,
+		db,
+		gHandler,
+	}
+	tg := getTestGroupModels(true)
+	for _, d := range tg {
+		_, err := gs.GroupCreate(d.toRoot())
+		if err != nil {
+			panic(err)
+		}
+	}
+	uCollection := db.GetCollection("users")
+	uHandler := db.NewUserHandler()
+	us := &UserService{
+		uCollection,
+		db,
+		uHandler,
+		gHandler,
+	}
+	tu := getTestUsersModels(true)
+	for _, d := range tu {
+		_, err := us.UserCreate(d.toRoot())
+		if err != nil {
+			panic(err)
+		}
+	}
+	collection := db.GetCollection("tasks")
+	tHandler := db.NewTaskHandler()
+	ts := &TaskService{
+		collection,
+		db,
+		tHandler,
+		uHandler,
+		gHandler,
+	}
+	td := getTestTasksModels()
+	for _, d := range td {
+		_, err := ts.TaskCreate(d.toRoot())
+		if err != nil {
+			panic(err)
+		}
+	}
+	return ts
 }
 
 /*
@@ -761,6 +893,12 @@ func newTestMongoDatabase(databaseName string) (*testMongoDatabase, error) {
 		return &testMongoDatabase{}, err
 	}
 	testsColls = append(testsColls, testBlacklistCollection)
+	testTasksCollection, err := newTestMongoCollection("tasks")
+	if err != nil {
+		fmt.Println("\nCOLLECTION INIT TASK ERROR: ", err.Error())
+		return &testMongoDatabase{}, err
+	}
+	testsColls = append(testsColls, testTasksCollection)
 	return &testMongoDatabase{
 		name:            databaseName,
 		testCollections: testsColls,
@@ -914,6 +1052,15 @@ func (db *testDBClient) NewGroupHandler() *DBHandler[*groupModel] {
 func (db *testDBClient) NewBlacklistHandler() *DBHandler[*blacklistModel] {
 	col := db.GetCollection("blacklists")
 	return &DBHandler[*blacklistModel]{
+		db:         db,
+		collection: col,
+	}
+}
+
+// NewTaskHandler returns a new DBHandler groups interface
+func (db *testDBClient) NewTaskHandler() *DBHandler[*taskModel] {
+	col := db.GetCollection("tasks")
+	return &DBHandler[*taskModel]{
 		db:         db,
 		collection: col,
 	}
