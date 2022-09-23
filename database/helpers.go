@@ -92,22 +92,120 @@ func bsonUnmarshall(colName string, bsonData interface{}) (data dbModel, err err
 }
 
 /*
-================ testGroupsUtils ==================
+================ Test Data ==================
 */
 
 func getTestGroupModels(root bool) []*groupModel {
 	var gms []*groupModel
 	var gm *groupModel
 	if root {
-		gm, _ = newGroupModel(&models.Group{Id: "000000000000000000000001", Name: "test1", RootAdmin: true})
+		gm, _ = newGroupModel(&models.Group{
+			Id:        "000000000000000000000001",
+			Name:      "test1",
+			RootAdmin: true,
+		})
 		gms = append(gms, gm)
 	}
-	gm, _ = newGroupModel(&models.Group{Id: "000000000000000000000002", Name: "test2", RootAdmin: false})
+	gm, _ = newGroupModel(&models.Group{
+		Id:        "000000000000000000000002",
+		Name:      "test2",
+		RootAdmin: false,
+	})
 	gms = append(gms, gm)
-	gm, _ = newGroupModel(&models.Group{Id: "000000000000000000000003", Name: "test3", RootAdmin: false})
+	gm, _ = newGroupModel(&models.Group{
+		Id:        "000000000000000000000003",
+		Name:      "test3",
+		RootAdmin: false,
+	})
 	gms = append(gms, gm)
 	return gms
 }
+
+func getTestUsersModels(root bool) []*userModel {
+	var gms []*userModel
+	var gm *userModel
+	if root {
+		gm, _ = newUserModel(&models.User{
+			Id:        "000000000000000000000011",
+			Email:     "test1@email.com",
+			Password:  "abc123",
+			GroupId:   "000000000000000000000001",
+			Role:      "admin",
+			RootAdmin: true,
+		})
+		gms = append(gms, gm)
+	}
+	gm, _ = newUserModel(&models.User{
+		Id:        "000000000000000000000012",
+		Email:     "test2@email.com",
+		Password:  "abc123",
+		GroupId:   "000000000000000000000002",
+		Role:      "member",
+		RootAdmin: false,
+	})
+	gms = append(gms, gm)
+	gm, _ = newUserModel(&models.User{
+		Id:        "000000000000000000000013",
+		Email:     "test3@email.com",
+		Password:  "abc123",
+		GroupId:   "000000000000000000000002",
+		Role:      "member",
+		RootAdmin: false,
+	})
+	gms = append(gms, gm)
+	return gms
+}
+
+func getTestTokens() []string {
+	return []string{
+		"123445608654321",
+		"123445678654321",
+	}
+}
+
+/*
+================ testBlacklistUtils ==================
+*/
+
+func initTestBlacklistService() *BlacklistService {
+	os.Setenv("ENV", "test")
+	os.Setenv("MONGO_URI", "mongodb+srv://in_mem")
+	os.Setenv("DATABASE", "test")
+	db, _ := initializeNewTestClient()
+	collection := db.GetCollection("blacklists")
+	gHandler := db.NewBlacklistHandler()
+	return &BlacklistService{
+		collection,
+		db,
+		gHandler,
+	}
+}
+
+func setupTestBlacklists() *BlacklistService {
+	os.Setenv("ENV", "test")
+	os.Setenv("MONGO_URI", "mongodb+srv://in_mem")
+	os.Setenv("DATABASE", "test")
+	db, _ := initializeNewTestClient()
+	collection := db.GetCollection("blacklists")
+	gHandler := db.NewBlacklistHandler()
+	gs := &BlacklistService{
+		collection,
+		db,
+		gHandler,
+	}
+	td := getTestTokens()
+	for _, d := range td {
+		err := gs.BlacklistAuthToken(d)
+		if err != nil {
+			panic(err)
+		}
+	}
+	return gs
+}
+
+/*
+================ testGroupsUtils ==================
+*/
 
 func initTestGroupService() *GroupService {
 	os.Setenv("ENV", "test")
@@ -123,9 +221,8 @@ func initTestGroupService() *GroupService {
 	}
 }
 
-func setupTestFindGroups() *GroupService {
+func setupTestGroups() *GroupService {
 	os.Setenv("ENV", "test")
-	os.Setenv("MONGO_URI", "mongodb+srv://in_mem")
 	os.Setenv("MONGO_URI", "mongodb+srv://in_mem")
 	os.Setenv("DATABASE", "test")
 	db, _ := initializeNewTestClient()
@@ -144,6 +241,78 @@ func setupTestFindGroups() *GroupService {
 		}
 	}
 	return gs
+}
+
+/*
+================ testUsersUtils ==================
+*/
+
+func initTestUserService() *UserService {
+	os.Setenv("ENV", "test")
+	os.Setenv("MONGO_URI", "mongodb+srv://in_mem")
+	os.Setenv("DATABASE", "test")
+	os.Setenv("TOKEN_SECRET", "SECRET")
+	db, _ := initializeNewTestClient()
+	gCollection := db.GetCollection("groups")
+	gHandler := db.NewGroupHandler()
+	gs := &GroupService{
+		gCollection,
+		db,
+		gHandler,
+	}
+	td := getTestGroupModels(true)
+	for _, d := range td {
+		_, err := gs.GroupCreate(d.toRoot())
+		if err != nil {
+			panic(err)
+		}
+	}
+	uCollection := db.GetCollection("users")
+	uHandler := db.NewUserHandler()
+	return &UserService{
+		uCollection,
+		db,
+		uHandler,
+		gHandler,
+	}
+}
+
+func setupTestUsers() *UserService {
+	os.Setenv("ENV", "test")
+	os.Setenv("MONGO_URI", "mongodb+srv://in_mem")
+	os.Setenv("DATABASE", "test")
+	os.Setenv("TOKEN_SECRET", "SECRET")
+	db, _ := initializeNewTestClient()
+	gCollection := db.GetCollection("groups")
+	gHandler := db.NewGroupHandler()
+	gs := &GroupService{
+		gCollection,
+		db,
+		gHandler,
+	}
+	tg := getTestGroupModels(true)
+	for _, d := range tg {
+		_, err := gs.GroupCreate(d.toRoot())
+		if err != nil {
+			panic(err)
+		}
+	}
+	collection := db.GetCollection("users")
+	uHandler := db.NewUserHandler()
+	us := &UserService{
+		collection,
+		db,
+		uHandler,
+		gHandler,
+	}
+	tu := getTestUsersModels(true)
+	for _, d := range tu {
+		_, err := us.UserCreate(d.toRoot())
+		if err != nil {
+			panic(err)
+		}
+	}
+	return us
 }
 
 /*
@@ -546,7 +715,7 @@ func (coll *testMongoCollection) CountDocuments(ctx context.Context, filter inte
 	coll.ctx = ctx
 	fmt.Println(filter, opts)
 	filterDoc, err := coll.unmarshallBSON(filter)
-	if err == nil {
+	if err != nil {
 		return c, err
 	}
 	reDocs, err := coll.find(filterDoc)

@@ -63,7 +63,7 @@ func (ur *userRouter) UpdatePassword(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	u, err := ur.uService.UpdatePassword(decodedToken, pw.CurrentPassword, pw.NewPassword)
+	u, err := ur.uService.UpdatePassword(decodedToken.ToUser(), pw.CurrentPassword, pw.NewPassword)
 	if err != nil {
 		w = utilities.SetResponseHeaders(w, "", "")
 		w.WriteHeader(403)

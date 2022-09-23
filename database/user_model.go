@@ -98,65 +98,23 @@ func (u *userModel) match(doc interface{}) bool {
 	}
 	um := userModel{}
 	err = bson.Unmarshal(data, &um)
-	if u.Id == um.Id {
-		return true
+	if um.Id.Hex() != "" && um.Id.Hex() != "000000000000000000000000" {
+		if u.Id == um.Id {
+			return true
+		}
+		return false
 	}
-	if u.Email == um.Email {
-		return true
+	if um.Email != "" {
+		if u.Email == um.Email {
+			return true
+		}
+		return false
 	}
 	if um.GroupId.Hex() != "" && um.GroupId.Hex() != "000000000000000000000000" {
-		if u.GroupId == um.GroupId && u.Username == um.Username {
-			return true
-		}
-		if u.GroupId == um.GroupId && u.FirstName == um.FirstName {
-			return true
-		}
-		if u.GroupId == um.GroupId && u.LastName == um.LastName {
-			return true
-		}
-		if u.GroupId == um.GroupId && u.RootAdmin == um.RootAdmin {
-			return true
-		}
-		if u.GroupId == um.GroupId && u.Role == um.Role {
-			return true
-		}
-		if u.GroupId == um.GroupId && u.LastModified == um.LastModified {
-			return true
-		}
-		if u.GroupId == um.GroupId && u.CreatedAt == um.CreatedAt {
-			return true
-		}
-		if u.GroupId == um.GroupId && u.DeletedAt == um.DeletedAt {
-			return true
-		}
 		if u.GroupId == um.GroupId {
 			return true
 		}
-	} else {
-		if u.Username == um.Username {
-			return true
-		}
-		if u.FirstName == um.FirstName {
-			return true
-		}
-		if u.LastName == um.LastName {
-			return true
-		}
-		if u.RootAdmin == um.RootAdmin {
-			return true
-		}
-		if u.Role == um.Role {
-			return true
-		}
-		if u.LastModified == um.LastModified {
-			return true
-		}
-		if u.CreatedAt == um.CreatedAt {
-			return true
-		}
-		if u.DeletedAt == um.DeletedAt {
-			return true
-		}
+		return false
 	}
 	return false
 }
@@ -184,7 +142,7 @@ func (u *userModel) addObjectID() {
 
 // postProcess updates an userModel struct postProcess to do things such as removing the password field's value
 func (u *userModel) postProcess() (err error) {
-	u.Password = ""
+	//u.Password = ""
 	if u.Email == "" {
 		err = errors.New("user record does not have an email")
 	}

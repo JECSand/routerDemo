@@ -2,6 +2,7 @@ package database
 
 import (
 	"errors"
+	"fmt"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"routerDemo/models"
@@ -63,16 +64,11 @@ func (b *blacklistModel) match(doc interface{}) bool {
 	}
 	bm := blacklistModel{}
 	err = bson.Unmarshal(data, &bm)
+	fmt.Println("\nCHECK BLACKLIST MATCH: ", bm, b)
 	if b.Id == bm.Id {
 		return true
 	}
 	if b.AuthToken == bm.AuthToken {
-		return true
-	}
-	if b.LastModified == bm.LastModified {
-		return true
-	}
-	if b.CreatedAt == bm.CreatedAt {
 		return true
 	}
 	return false
@@ -119,7 +115,9 @@ func (b *blacklistModel) toDoc() (doc bson.D, err error) {
 
 // bsonFilter generates a bson filter for MongoDB queries from the blacklistModel data
 func (b *blacklistModel) bsonFilter() (doc bson.D, err error) {
-	if b.Id.Hex() != "" && b.Id.Hex() != "000000000000000000000000" {
+	if b.AuthToken != "" {
+		doc = bson.D{{"auth_token", b.AuthToken}}
+	} else if b.Id.Hex() != "" && b.Id.Hex() != "000000000000000000000000" {
 		doc = bson.D{{"_id", b.Id}}
 	}
 	return

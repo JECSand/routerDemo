@@ -70,7 +70,7 @@ func Test_GroupsFind(t *testing.T) {
 	// Iterating over the previous test slice
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			testService := setupTestFindGroups()
+			testService := setupTestGroups()
 			got, err := testService.GroupsFind()
 			// Checking the error
 			if (err != nil) != tt.wantErr {
@@ -103,7 +103,7 @@ func Test_GroupFind(t *testing.T) {
 	// Iterating over the previous test slice
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			testService := setupTestFindGroups()
+			testService := setupTestGroups()
 			got, err := testService.GroupFind(tt.group)
 			// Checking the error
 			if (err != nil) != tt.wantErr {
@@ -142,7 +142,7 @@ func Test_GroupUpdate(t *testing.T) {
 	// Iterating over the previous test slice
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			testService := setupTestFindGroups()
+			testService := setupTestGroups()
 			got, err := testService.GroupUpdate(tt.group)
 			// Checking the error
 			if (err != nil) != tt.wantErr {
@@ -181,7 +181,7 @@ func Test_GroupDelete(t *testing.T) {
 	// Iterating over the previous test slice
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			testService := setupTestFindGroups()
+			testService := setupTestGroups()
 			got, err := testService.GroupDelete(tt.group)
 			// Checking the error
 			if (err != nil) != tt.wantErr {
