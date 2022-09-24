@@ -7,6 +7,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"routerDemo/models"
 	"routerDemo/utilities"
+	"sync"
 	"time"
 )
 
@@ -22,6 +23,35 @@ type UserService struct {
 func NewUserService(db DBClient, uHandler *DBHandler[*userModel], gHandler *DBHandler[*groupModel]) *UserService {
 	collection := db.GetCollection("users")
 	return &UserService{collection, db, uHandler, gHandler}
+}
+
+// checkLinkedRecords ensures the email is unique and groupId valid for a User
+func (p *UserService) checkLinkedRecords(g *groupModel, u *userModel, curUser *userModel) error {
+	var wg sync.WaitGroup
+	uCh := make(chan *userModel)
+	uErr := make(chan error)
+	gCh := make(chan *groupModel)
+	gErr := make(chan error)
+	uRoutine := p.userHandler.newRoutine()
+	gRoutine := p.groupHandler.newRoutine()
+	wg.Add(2)
+	go uRoutine.execute(FindOne, uCh, uErr, u, nil)
+	go gRoutine.execute(FindOne, gCh, gErr, g, nil)
+	go uRoutine.resolve(uCh, uErr, &wg)
+	go gRoutine.resolve(gCh, gErr, &wg)
+	wg.Wait()
+	close(uCh)
+	close(uErr)
+	close(gCh)
+	close(gErr)
+	if curUser == nil && uRoutine.err == nil {
+		return errors.New("email is taken")
+	} else if uRoutine.err == nil && curUser.Email != u.Email {
+		return errors.New("email is taken")
+	} else if gRoutine.err != nil {
+		return errors.New("invalid group id")
+	}
+	return nil
 }
 
 // AuthenticateUser is used to authenticate users that are signing in
@@ -57,12 +87,9 @@ func (p *UserService) UserCreate(u *models.User) (*models.User, error) {
 	if err != nil {
 		return nil, err
 	}
-	_, emailErr := p.userHandler.FindOne(&userModel{Email: um.Email})
-	_, groupErr := p.groupHandler.FindOne(&groupModel{Id: um.GroupId})
-	if emailErr == nil {
-		return nil, errors.New("email has been taken")
-	} else if groupErr != nil {
-		return nil, errors.New("invalid group id")
+	err = p.checkLinkedRecords(&groupModel{Id: um.GroupId}, &userModel{Email: um.Email}, nil)
+	if err != nil {
+		return nil, err
 	}
 	err = u.HashPassword()
 	if err != nil {
@@ -157,12 +184,9 @@ func (p *UserService) UserUpdate(u *models.User) (*models.User, error) {
 	if err != nil {
 		return nil, err
 	}
-	_, emailErr := p.userHandler.FindOne(&userModel{Email: um.Email})
-	_, groupErr := p.groupHandler.FindOne(&groupModel{Id: um.GroupId})
-	if emailErr == nil && curUser.Email != u.Email {
-		return nil, errors.New("email is taken")
-	} else if groupErr != nil {
-		return nil, errors.New("invalid group id")
+	err = p.checkLinkedRecords(&groupModel{Id: um.GroupId}, &userModel{Email: um.Email}, curUser)
+	if err != nil {
+		return nil, err
 	}
 	err = u.HashPassword()
 	if u.Password != "" {
@@ -190,10 +214,6 @@ func (p *UserService) UpdatePassword(u *models.User, currentPassword string, new
 	}
 	rootUser := user.toRoot()
 	err = rootUser.Authenticate(currentPassword)
-	// 2. Check current password
-	//password := []byte(currentPassword)
-	//checkPassword := []byte(user.Password)
-	//err = bcrypt.CompareHashAndPassword(checkPassword, password)
 	if err == nil { // 3. Update doc with new password
 		currentTime := time.Now().UTC()
 		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)

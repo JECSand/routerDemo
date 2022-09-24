@@ -6,6 +6,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -171,6 +172,14 @@ func (h *DBHandler[T]) FindOne(filter T) (T, error) {
 		return filter, err
 	}
 	return m, nil
+}
+
+// FindOneAsync is used to get a dbModel from the db with custom filter
+func (h *DBHandler[T]) FindOneAsync(tCh chan T, eCh chan error, filter T, wg *sync.WaitGroup) {
+	defer wg.Done()
+	t, err := h.FindOne(filter)
+	tCh <- t
+	eCh <- err
 }
 
 // FindMany is used to get a slice of dbModels from the db with custom filter

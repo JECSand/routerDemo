@@ -22,32 +22,6 @@ func NewTaskService(db DBClient, tHandler *DBHandler[*taskModel], uHandler *DBHa
 	return &TaskService{collection, db, tHandler, uHandler, gHandler}
 }
 
-/*
-// checkLinkedRecords ensures the userId and groupId in the models.Task is correct
-func (p *TaskService) checkLinkedRecords(g *groupModel, u *userModel) error {
-	var wg sync.WaitGroup
-	gRoutine := p.groupHandler.newRoutine()
-	uRoutine := p.userHandler.newRoutine()
-	wg.Add(1)
-	gRoutine.execute(FindOne, g, nil, &wg)
-	wg.Add(1)
-	uRoutine.execute(FindOne, u, nil, &wg)
-	gRoutine.resolve()
-	uRoutine.resolve()
-	wg.Wait()
-	if gRoutine.err != nil {
-		return errors.New("invalid group id")
-	}
-	if uRoutine.err != nil {
-		return errors.New("invalid user id")
-	}
-	if gRoutine.out.Id != uRoutine.out.GroupId {
-		return errors.New("task user is not in task group")
-	}
-	return nil
-}
-*/
-
 // checkLinkedRecords ensures the userId and groupId in the models.Task is correct
 func (p *TaskService) checkLinkedRecords(g *groupModel, u *userModel) error {
 	gOutCh := make(chan *groupModel)
@@ -96,24 +70,10 @@ func (p *TaskService) TaskCreate(g *models.Task) (*models.Task, error) {
 	if err != nil {
 		return nil, err
 	}
-	// TODO - MAKE ASYNC
 	err = p.checkLinkedRecords(&groupModel{Id: gm.GroupId}, &userModel{Id: gm.UserId})
 	if err != nil {
 		return nil, err
 	}
-	/*
-		reG, gErr := p.groupHandler.FindOne(&groupModel{Id: gm.GroupId})
-		if gErr != nil {
-			return nil, errors.New("invalid group id")
-		}
-		reU, uErr := p.userHandler.FindOne(&userModel{Id: gm.UserId})
-		if uErr != nil {
-			return nil, errors.New("invalid user id")
-		}
-		if reG.Id != reU.GroupId {
-			return nil, errors.New("task user is not in task group")
-		}
-	*/
 	gm, err = p.taskHandler.InsertOne(gm)
 	if err != nil {
 		return nil, err
@@ -185,17 +145,9 @@ func (p *TaskService) TaskUpdate(g *models.Task) (*models.Task, error) {
 	if err != nil {
 		return nil, err
 	}
-	// TODO MAKE ASYNC
-	reG, gErr := p.groupHandler.FindOne(&groupModel{Id: gm.GroupId})
-	reU, uErr := p.userHandler.FindOne(&userModel{Id: gm.UserId})
-	if gErr != nil {
-		return nil, errors.New("invalid group id")
-	}
-	if uErr != nil {
-		return nil, errors.New("invalid user id")
-	}
-	if reG.Id != reU.GroupId {
-		return nil, errors.New("task user is not in task group")
+	err = p.checkLinkedRecords(&groupModel{Id: gm.GroupId}, &userModel{Id: gm.UserId})
+	if err != nil {
+		return nil, err
 	}
 	gm, err = p.taskHandler.UpdateOne(f, gm)
 	if err != nil {
