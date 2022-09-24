@@ -22,20 +22,21 @@ func NewGroupService(db DBClient, handler *DBHandler[*groupModel]) *GroupService
 
 // GroupCreate is used to create a new user group
 func (p *GroupService) GroupCreate(g *models.Group) (*models.Group, error) {
-	if g.Name == "" {
-		return g, errors.New("new group must have a Name")
+	err := g.Validate("create")
+	if err != nil {
+		return nil, err
 	}
 	gm, err := newGroupModel(g)
 	if err != nil {
-		return g, err
+		return nil, err
 	}
 	_, err = p.handler.FindOne(&groupModel{Name: gm.Name})
 	if err == nil {
-		return &models.Group{}, errors.New("group name exists")
+		return nil, errors.New("group name exists")
 	}
 	gm, err = p.handler.InsertOne(gm)
 	if err != nil {
-		return g, err
+		return nil, err
 	}
 	return gm.toRoot(), err
 }
@@ -57,11 +58,11 @@ func (p *GroupService) GroupsFind() ([]*models.Group, error) {
 func (p *GroupService) GroupFind(g *models.Group) (*models.Group, error) {
 	gm, err := newGroupModel(g)
 	if err != nil {
-		return g, err
+		return nil, err
 	}
 	gm, err = p.handler.FindOne(gm)
 	if err != nil {
-		return g, err
+		return nil, err
 	}
 	return gm.toRoot(), err
 }
@@ -70,11 +71,11 @@ func (p *GroupService) GroupFind(g *models.Group) (*models.Group, error) {
 func (p *GroupService) GroupDelete(g *models.Group) (*models.Group, error) {
 	gm, err := newGroupModel(g)
 	if err != nil {
-		return g, err
+		return nil, err
 	}
 	gm, err = p.handler.DeleteOne(gm)
 	if err != nil {
-		return g, err
+		return nil, err
 	}
 	return gm.toRoot(), err
 }
@@ -82,27 +83,28 @@ func (p *GroupService) GroupDelete(g *models.Group) (*models.Group, error) {
 // GroupUpdate is used to update an existing group
 func (p *GroupService) GroupUpdate(g *models.Group) (*models.Group, error) {
 	var filter models.Group
-	if g.Id == "" || g.Id == "000000000000000000000000" {
-		return g, errors.New("group is missing a valid query filter")
+	err := g.Validate("create")
+	if err != nil {
+		return nil, errors.New("missing valid query filter")
 	}
 	filter.Id = g.Id
 	if g.Name != "" {
 		reDoc, err := p.handler.FindOne(&groupModel{Name: g.Name})
 		if err == nil && reDoc.toRoot().Id != filter.Id {
-			return g, errors.New("group name exists")
+			return nil, errors.New("group name exists")
 		}
 	}
 	f, err := newGroupModel(&filter)
 	if err != nil {
-		return g, err
+		return nil, err
 	}
 	gm, err := newGroupModel(g)
 	if err != nil {
-		return g, err
+		return nil, err
 	}
 	_, groupErr := p.handler.FindOne(f)
 	if groupErr != nil {
-		return &models.Group{}, errors.New("group not found")
+		return nil, errors.New("group not found")
 	}
 	gm, err = p.handler.UpdateOne(f, gm)
 	return gm.toRoot(), err
@@ -111,11 +113,14 @@ func (p *GroupService) GroupUpdate(g *models.Group) (*models.Group, error) {
 // GroupDocInsert is used to insert a group doc directly into mongodb for testing purposes
 func (p *GroupService) GroupDocInsert(g *models.Group) (*models.Group, error) {
 	insertGroup, err := newGroupModel(g)
+	if err != nil {
+		return nil, err
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	_, err = p.collection.InsertOne(ctx, insertGroup)
 	if err != nil {
-		return g, err
+		return nil, err
 	}
 	return insertGroup.toRoot(), nil
 }

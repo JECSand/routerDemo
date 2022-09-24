@@ -294,7 +294,7 @@ func Test_UserDelete(t *testing.T) {
 		},
 		{
 			"user not found",
-			&models.User{Id: "000000000000000000000014"},
+			nil,
 			true,
 			&models.User{Id: "000000000000000000000014"},
 		},
@@ -309,9 +309,21 @@ func Test_UserDelete(t *testing.T) {
 				t.Errorf("UserService.UserDelete() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if got.Id != tt.want.Id { // Asserting whether we get the correct wanted value
-				t.Errorf("UserService.UserDelete() = %v, want %v", got.Id, tt.want.Id)
+			var failMsg string
+			switch tt.name {
+			case "success":
+				if got.Id != tt.want.Id { // Asserting whether we get the correct wanted value
+					failMsg = fmt.Sprintf("UserService.UserDelete() = %v, want %v", got.Id, tt.want.Id)
+				}
+			case "user not found":
+				if got != tt.want { // Asserting whether we get the correct wanted value
+					failMsg = fmt.Sprintf("UserService.UserDelete() = %v, want %v", got, tt.want)
+				}
 			}
+			if failMsg != "" {
+				t.Errorf(failMsg)
+			}
+
 		})
 	}
 }

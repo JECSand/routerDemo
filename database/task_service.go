@@ -3,7 +3,6 @@ package database
 import (
 	"context"
 	"errors"
-	"fmt"
 	"routerDemo/models"
 	"time"
 )
@@ -23,6 +22,70 @@ func NewTaskService(db DBClient, tHandler *DBHandler[*taskModel], uHandler *DBHa
 	return &TaskService{collection, db, tHandler, uHandler, gHandler}
 }
 
+/*
+// checkLinkedRecords ensures the userId and groupId in the models.Task is correct
+func (p *TaskService) checkLinkedRecords(g *groupModel, u *userModel) error {
+	var wg sync.WaitGroup
+	gRoutine := p.groupHandler.newRoutine()
+	uRoutine := p.userHandler.newRoutine()
+	wg.Add(1)
+	gRoutine.execute(FindOne, g, nil, &wg)
+	wg.Add(1)
+	uRoutine.execute(FindOne, u, nil, &wg)
+	gRoutine.resolve()
+	uRoutine.resolve()
+	wg.Wait()
+	if gRoutine.err != nil {
+		return errors.New("invalid group id")
+	}
+	if uRoutine.err != nil {
+		return errors.New("invalid user id")
+	}
+	if gRoutine.out.Id != uRoutine.out.GroupId {
+		return errors.New("task user is not in task group")
+	}
+	return nil
+}
+*/
+
+// checkLinkedRecords ensures the userId and groupId in the models.Task is correct
+func (p *TaskService) checkLinkedRecords(g *groupModel, u *userModel) error {
+	gOutCh := make(chan *groupModel)
+	gErrCh := make(chan error)
+	uOutCh := make(chan *userModel)
+	uErrCh := make(chan error)
+	go func() {
+		reG, err := p.groupHandler.FindOne(g)
+		gOutCh <- reG
+		gErrCh <- err
+	}()
+	go func() {
+		reU, err := p.userHandler.FindOne(u)
+		uOutCh <- reU
+		uErrCh <- err
+	}()
+	for i := 0; i < 4; i++ {
+		select {
+		case gOut := <-gOutCh:
+			g = gOut
+		case gErr := <-gErrCh:
+			if gErr != nil {
+				return errors.New("invalid group id")
+			}
+		case uOut := <-uOutCh:
+			u = uOut
+		case uErr := <-uErrCh:
+			if uErr != nil {
+				return errors.New("invalid user id")
+			}
+		}
+	}
+	if g.Id != u.GroupId {
+		return errors.New("task user is not in task group")
+	}
+	return nil
+}
+
 // TaskCreate is used to create a new user Task
 func (p *TaskService) TaskCreate(g *models.Task) (*models.Task, error) {
 	err := g.Validate("create")
@@ -31,23 +94,29 @@ func (p *TaskService) TaskCreate(g *models.Task) (*models.Task, error) {
 	}
 	gm, err := newTaskModel(g)
 	if err != nil {
-		return g, err
+		return nil, err
 	}
-	reG, gErr := p.groupHandler.FindOne(&groupModel{Id: gm.GroupId})
-	if gErr != nil {
-		fmt.Println("CHECK group error: ", gErr.Error())
-		return g, errors.New("invalid group id")
+	// TODO - MAKE ASYNC
+	err = p.checkLinkedRecords(&groupModel{Id: gm.GroupId}, &userModel{Id: gm.UserId})
+	if err != nil {
+		return nil, err
 	}
-	reU, uErr := p.userHandler.FindOne(&userModel{Id: gm.UserId})
-	if uErr != nil {
-		return g, errors.New("invalid user id")
-	}
-	if reG.Id != reU.GroupId {
-		return g, errors.New("task user is not in task group")
-	}
+	/*
+		reG, gErr := p.groupHandler.FindOne(&groupModel{Id: gm.GroupId})
+		if gErr != nil {
+			return nil, errors.New("invalid group id")
+		}
+		reU, uErr := p.userHandler.FindOne(&userModel{Id: gm.UserId})
+		if uErr != nil {
+			return nil, errors.New("invalid user id")
+		}
+		if reG.Id != reU.GroupId {
+			return nil, errors.New("task user is not in task group")
+		}
+	*/
 	gm, err = p.taskHandler.InsertOne(gm)
 	if err != nil {
-		return g, err
+		return nil, err
 	}
 	return gm.toRoot(), err
 }
@@ -73,11 +142,11 @@ func (p *TaskService) TasksFind(g *models.Task) ([]*models.Task, error) {
 func (p *TaskService) TaskFind(g *models.Task) (*models.Task, error) {
 	gm, err := newTaskModel(g)
 	if err != nil {
-		return g, err
+		return nil, err
 	}
 	gm, err = p.taskHandler.FindOne(gm)
 	if err != nil {
-		return g, err
+		return nil, err
 	}
 	return gm.toRoot(), err
 }
@@ -86,11 +155,11 @@ func (p *TaskService) TaskFind(g *models.Task) (*models.Task, error) {
 func (p *TaskService) TaskDelete(g *models.Task) (*models.Task, error) {
 	gm, err := newTaskModel(g)
 	if err != nil {
-		return g, err
+		return nil, err
 	}
 	gm, err = p.taskHandler.DeleteOne(gm)
 	if err != nil {
-		return g, err
+		return nil, err
 	}
 	return gm.toRoot(), err
 }
@@ -105,32 +174,32 @@ func (p *TaskService) TaskUpdate(g *models.Task) (*models.Task, error) {
 	filter.Id = g.Id
 	f, err := newTaskModel(&filter)
 	if err != nil {
-		return g, err
+		return nil, err
 	}
 	cur, TaskErr := p.taskHandler.FindOne(f)
 	if TaskErr != nil {
-		return &models.Task{}, errors.New("task not found")
+		return nil, errors.New("task not found")
 	}
 	g.BuildUpdate(cur.toRoot())
 	gm, err := newTaskModel(g)
 	if err != nil {
-		return g, err
+		return nil, err
 	}
+	// TODO MAKE ASYNC
 	reG, gErr := p.groupHandler.FindOne(&groupModel{Id: gm.GroupId})
 	reU, uErr := p.userHandler.FindOne(&userModel{Id: gm.UserId})
 	if gErr != nil {
-		// fmt.Println("CHECK group error: ", gErr.Error())
-		return g, errors.New("invalid group id")
+		return nil, errors.New("invalid group id")
 	}
 	if uErr != nil {
-		return g, errors.New("invalid user id")
+		return nil, errors.New("invalid user id")
 	}
 	if reG.Id != reU.GroupId {
-		return g, errors.New("task user is not in task group")
+		return nil, errors.New("task user is not in task group")
 	}
 	gm, err = p.taskHandler.UpdateOne(f, gm)
 	if err != nil {
-		return g, err
+		return nil, err
 	}
 	return gm.toRoot(), err
 }
@@ -145,7 +214,7 @@ func (p *TaskService) TaskDocInsert(g *models.Task) (*models.Task, error) {
 	defer cancel()
 	_, err = p.collection.InsertOne(ctx, insertTask)
 	if err != nil {
-		return g, err
+		return nil, err
 	}
 	return insertTask.toRoot(), nil
 }

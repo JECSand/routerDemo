@@ -1,6 +1,7 @@
 package database
 
 import (
+	"fmt"
 	"reflect"
 	"routerDemo/models"
 	"testing"
@@ -23,7 +24,7 @@ func Test_GroupCreate(t *testing.T) {
 		},
 		{
 			"missing name",
-			&models.Group{Id: "000000000000000000000002", RootAdmin: false},
+			nil,
 			true,
 			&models.Group{Id: "000000000000000000000002", RootAdmin: false},
 		},
@@ -46,8 +47,19 @@ func Test_GroupCreate(t *testing.T) {
 					tt.want.LastModified = got.LastModified
 				}
 			}
-			if !reflect.DeepEqual(got, tt.want) { // Asserting whether we get the correct wanted value
-				t.Errorf("GroupService.GroupCreate() = %v, want %v", got, tt.want)
+			var failMsg string
+			switch tt.name {
+			case "success":
+				if !reflect.DeepEqual(got, tt.want) { // Asserting whether we get the correct wanted value
+					failMsg = fmt.Sprintf("GroupService.GroupCreate() = %v, want %v", got, tt.want)
+				}
+			case "missing name":
+				if got != tt.want { // Asserting whether we get the correct wanted value
+					failMsg = fmt.Sprintf("GroupService.GroupUpdate() = %v, want %v", got.Name, tt.want.Name)
+				}
+			}
+			if failMsg != "" {
+				t.Errorf(failMsg)
 			}
 		})
 	}
@@ -110,8 +122,15 @@ func Test_GroupFind(t *testing.T) {
 				t.Errorf("GroupService.GroupFind() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if got.Id != tt.want.Id { // Asserting whether we get the correct wanted value
-				t.Errorf("GroupService.GroupFind() = %v, want %v", got.Id, tt.want.Id)
+			var failMsg string
+			switch tt.name {
+			case "find by id":
+				if got.Id != tt.want.Id { // Asserting whether we get the correct wanted value
+					failMsg = fmt.Sprintf("GroupService.GroupFind() = %v, want %v", got.Id, tt.want.Id)
+				}
+			}
+			if failMsg != "" {
+				t.Errorf(failMsg)
 			}
 		})
 	}
@@ -134,7 +153,7 @@ func Test_GroupUpdate(t *testing.T) {
 		},
 		{
 			"name taken",
-			&models.Group{Id: "000000000000000000000002", Name: "test3"},
+			nil,
 			true,
 			&models.Group{Id: "000000000000000000000002", Name: "test3"},
 		},
@@ -149,8 +168,19 @@ func Test_GroupUpdate(t *testing.T) {
 				t.Errorf("GroupService.GroupUpdate() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if got.Name != tt.want.Name { // Asserting whether we get the correct wanted value
-				t.Errorf("GroupService.GroupUpdate() = %v, want %v", got.Name, tt.want.Name)
+			var failMsg string
+			switch tt.name {
+			case "success":
+				if got.Name != tt.want.Name { // Asserting whether we get the correct wanted value
+					failMsg = fmt.Sprintf("GroupService.GroupUpdate() = %v, want %v", got.Name, tt.want.Name)
+				}
+			case "name taken":
+				if got != tt.want { // Asserting whether we get the correct wanted value
+					failMsg = fmt.Sprintf("GroupService.GroupUpdate() = %v, want %v", got.Name, tt.want.Name)
+				}
+			}
+			if failMsg != "" {
+				t.Errorf(failMsg)
 			}
 		})
 	}
@@ -188,8 +218,19 @@ func Test_GroupDelete(t *testing.T) {
 				t.Errorf("GroupService.GroupDelete() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if got.Id != tt.want.Id { // Asserting whether we get the correct wanted value
-				t.Errorf("GroupService.GroupDelete() = %v, want %v", got.Id, tt.want.Id)
+			var failMsg string
+			switch tt.name {
+			case "success":
+				if got.Id != tt.want.Id { // Asserting whether we get the correct wanted value
+					failMsg = fmt.Sprintf("GroupService.GroupDelete() = %v, want %v", got.Id, tt.want.Id)
+				}
+			case "name taken":
+				if got != tt.want { // Asserting whether we get the correct wanted value
+					failMsg = fmt.Sprintf("GroupService.GroupUpdate() = %v, want %v", got.Name, tt.want.Name)
+				}
+			}
+			if failMsg != "" {
+				t.Errorf(failMsg)
 			}
 		})
 	}

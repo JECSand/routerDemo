@@ -2,6 +2,7 @@ package models
 
 import (
 	"errors"
+	"golang.org/x/crypto/bcrypt"
 	"strings"
 	"time"
 )
@@ -37,6 +38,30 @@ func (g *User) checkID(chkId string) bool {
 	return true
 }
 
+// Authenticate compares an input password with the hashed password stored in the User model
+func (g *User) Authenticate(checkPassword string) error {
+	if len(g.Password) != 0 {
+		password := []byte(g.Password)
+		cPassword := []byte(checkPassword)
+		return bcrypt.CompareHashAndPassword(password, cPassword)
+	}
+	return errors.New("no password set to hash in user model")
+}
+
+// HashPassword hashes a user password and associates it with the user struct
+func (g *User) HashPassword() error {
+	if len(g.Password) != 0 {
+		password := []byte(g.Password)
+		hashedPassword, err := bcrypt.GenerateFromPassword(password, bcrypt.DefaultCost)
+		if err != nil {
+			return err
+		}
+		g.Password = string(hashedPassword)
+		return nil
+	}
+	return errors.New("no password set to hash in user model")
+}
+
 // Validate a User for different scenarios such as loading TokenData, creating new User, or updating a User
 func (g *User) Validate(valCase string) (err error) {
 	var missingFields []string
@@ -65,7 +90,7 @@ func (g *User) Validate(valCase string) (err error) {
 			missingFields = append(missingFields, "group_id")
 		}
 	case "update":
-		if !g.checkID("id") {
+		if !g.checkID("id") && g.Email == "" {
 			missingFields = append(missingFields, "id")
 		}
 	default:
@@ -75,6 +100,19 @@ func (g *User) Validate(valCase string) (err error) {
 		return errors.New("missing the following user fields: " + strings.Join(missingFields, ", "))
 	}
 	return
+}
+
+// BuildFilter is a function that setups the base user struct during a user modification request
+func (g *User) BuildFilter() (*User, error) {
+	var filter User
+	if g.checkID("id") {
+		filter.Id = g.Id
+	} else if g.Email != "" {
+		filter.Email = g.Email
+	} else {
+		return nil, errors.New("user is missing a valid query filter")
+	}
+	return &filter, nil
 }
 
 // BuildUpdate is a function that setups the base user struct during a user modification request

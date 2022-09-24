@@ -143,9 +143,17 @@ func Test_TaskFind(t *testing.T) {
 				t.Errorf("TaskService.TaskFind() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if got.Id != tt.want.Id || got.Name != tt.want.Name { // Asserting whether we get the correct wanted value
-				t.Errorf("TaskService.TaskFind() = %v, want %v", got.Id, tt.want.Id)
+			var failMsg string
+			switch tt.name {
+			case "success":
+				if got.Id != tt.want.Id || got.Name != tt.want.Name { // Asserting whether we get the correct wanted value
+					failMsg = fmt.Sprintf("TaskService.TaskFind() = %v, want %v", got.Id, tt.want.Id)
+				}
 			}
+			if failMsg != "" {
+				t.Errorf(failMsg)
+			}
+
 		})
 	}
 }
@@ -213,7 +221,7 @@ func Test_TaskDelete(t *testing.T) {
 		},
 		{
 			"task not found",
-			&models.Task{Id: "000000000000000000000025", Name: "test3"},
+			nil,
 			true,
 			&models.Task{Id: "000000000000000000000025"},
 		},
@@ -228,8 +236,19 @@ func Test_TaskDelete(t *testing.T) {
 				t.Errorf("TaskService.TaskDelete() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if got.Id != tt.want.Id { // Asserting whether we get the correct wanted value
-
+			var failMsg string
+			switch tt.name {
+			case "success":
+				if got.Id != tt.want.Id { // Asserting whether we get the correct wanted value
+					failMsg = fmt.Sprintf("TaskService.TaskDelete() = %v, want %v", got.Id, tt.want.Id)
+				}
+			case "task not found":
+				if got != tt.want { // Asserting whether we get the correct wanted value
+					failMsg = fmt.Sprintf("TaskService.TaskDelete() = %v, want %v", got, tt.want)
+				}
+			}
+			if failMsg != "" {
+				t.Errorf(failMsg)
 			}
 		})
 	}

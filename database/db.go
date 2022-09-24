@@ -252,3 +252,8 @@ func (h *DBHandler[T]) DeleteOne(filter T) (T, error) { //TODO: to be replaced w
 	err = h.collection.FindOneAndDelete(ctx, f).Decode(&m)
 	return m, err
 }
+
+// newRoutine returns a new Routine for executing ASYNC DB statements
+func (h *DBHandler[T]) newRoutine() *dbRoutine[T] {
+	return &dbRoutine[T]{handler: h}
+}
