@@ -19,7 +19,7 @@ type TaskService struct {
 
 // NewTaskService is an exported function used to initialize a new TaskService struct
 func NewTaskService(db DBClient, tHandler *DBHandler[*taskModel], uHandler *DBHandler[*userModel], gHandler *DBHandler[*groupModel]) *TaskService {
-	collection := db.GetCollection("Tasks")
+	collection := db.GetCollection("tasks")
 	return &TaskService{collection, db, tHandler, uHandler, gHandler}
 }
 
@@ -138,9 +138,11 @@ func (p *TaskService) TaskUpdate(g *models.Task) (*models.Task, error) {
 // TaskDocInsert is used to insert a Task doc directly into mongodb for testing purposes
 func (p *TaskService) TaskDocInsert(g *models.Task) (*models.Task, error) {
 	insertTask, err := newTaskModel(g)
+	if err != nil {
+		return nil, err
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	insertTask.addTimeStamps(true)
 	_, err = p.collection.InsertOne(ctx, insertTask)
 	if err != nil {
 		return g, err

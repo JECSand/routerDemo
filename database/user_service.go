@@ -237,7 +237,6 @@ func (p *UserService) UserDocInsert(u *models.User) (*models.User, error) {
 	}
 	u.Password = string(hashedPassword)
 	insertUser, err := newUserModel(u)
-	insertUser.addTimeStamps(true)
 	if err != nil {
 		return u, err
 	}

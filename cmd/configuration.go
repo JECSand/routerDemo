@@ -20,13 +20,19 @@ type configuration struct {
 
 // getConfigurations is a function that reads a json configuration file and outputs a Configuration struct
 func getConfigurations() (*configuration, error) {
-	confFile := "confs.json"
-	file, _ := os.Open(confFile)
+	confFile := "conf.json"
+	if os.Getenv("ENV") == "test" {
+		confFile = "test_conf.json"
+	}
+	file, err := os.Open(confFile)
+	if err != nil {
+		return nil, err
+	}
 	decoder := json.NewDecoder(file)
 	configurationSettings := configuration{}
-	err := decoder.Decode(&configurationSettings)
+	err = decoder.Decode(&configurationSettings)
 	if err != nil {
-		return &configurationSettings, err
+		return nil, err
 	}
 	return &configurationSettings, nil
 }

@@ -113,7 +113,6 @@ func (p *GroupService) GroupDocInsert(g *models.Group) (*models.Group, error) {
 	insertGroup, err := newGroupModel(g)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	insertGroup.addTimeStamps(true)
 	_, err = p.collection.InsertOne(ctx, insertGroup)
 	if err != nil {
 		return g, err

@@ -19,6 +19,20 @@ import (
 ================ testDBUtils ==================
 */
 
+// cleanUpdateBSON inputs a bson type and attempts to marshall it into a slice of bytes
+func cleanUpdateBSON(bsonData interface{}) (data interface{}, err error) {
+	switch t := bsonData.(type) {
+	case nil:
+		return nil, errors.New("input bsonData to marshall can not be nil")
+	case bson.D:
+		if len(t) > 0 && t[0].Key == "$set" {
+			return t[0].Value, nil
+		}
+		return t, nil
+	}
+	return bsonData, nil
+}
+
 // standardizeID ensures that a dbModels unique identified is returned as a string
 func standardizeID(dbDoc dbModel) (string, error) {
 	var docId string
@@ -55,6 +69,11 @@ func bsonMarshall(bsonData interface{}) (data []byte, err error) {
 		if err != nil {
 			return
 		}
+	case bson.E:
+		data, err = bson.Marshal(t)
+		if err != nil {
+			return
+		}
 	}
 	return
 }
@@ -65,6 +84,7 @@ func bsonUnmarshall(colName string, bsonData interface{}) (data dbModel, err err
 	case "users":
 		bData, err := bsonMarshall(bsonData)
 		if err != nil {
+			panic(err)
 			return nil, err
 		}
 		um := userModel{}
@@ -95,7 +115,6 @@ func bsonUnmarshall(colName string, bsonData interface{}) (data dbModel, err err
 		err = bson.Unmarshal(bData, &tm)
 		return &tm, nil
 	}
-	// fmt.Println("\nCHECK bsonUnmarshall NAME: ", colName)
 	return nil, errors.New("invalid test collection type")
 }
 
@@ -566,6 +585,7 @@ func newTestMongoCollection(name string) (*testMongoCollection, error) {
 
 // unmarshallBSON converts a BSON byte type back into a dbModel
 func (coll *testMongoCollection) unmarshallBSON(bsonData interface{}) (dbModel, error) {
+
 	return bsonUnmarshall(coll.name, bsonData)
 }
 
@@ -704,7 +724,7 @@ func (coll *testMongoCollection) delete(dbDocs []dbModel) (reDocs []dbModel, err
 // InsertOne into test collection
 func (coll *testMongoCollection) InsertOne(ctx context.Context, document interface{}, opts ...*options.InsertOneOptions) (*mongo.InsertOneResult, error) {
 	coll.ctx = ctx
-	fmt.Println(document, opts)
+	fmt.Println("\n--->INSERT ONE: ", document, opts)
 	doc := document.(dbModel)
 	err := coll.insert([]dbModel{doc})
 	return &mongo.InsertOneResult{InsertedID: doc.getID()}, err
@@ -716,7 +736,7 @@ func (coll *testMongoCollection) InsertMany(ctx context.Context, documents []int
 	if len(documents) == 0 {
 		return nil, mongo.ErrEmptySlice
 	}
-	fmt.Println(documents, opts)
+	fmt.Println("\n--->INSERT MANY: ", documents, opts)
 	var inDocs []dbModel
 	for _, d := range documents {
 		inDocs = append(inDocs, d.(dbModel))
@@ -737,7 +757,7 @@ func (coll *testMongoCollection) InsertMany(ctx context.Context, documents []int
 func (coll *testMongoCollection) DeleteOne(ctx context.Context, filter interface{}, opts ...*options.DeleteOptions) (*mongo.DeleteResult, error) {
 	var delCount int64
 	coll.ctx = ctx
-	fmt.Println(filter, opts)
+	fmt.Println("\n--->DELETE ONE: ", filter, opts)
 	filterDoc, err := coll.unmarshallBSON(filter)
 	if err != nil {
 		return nil, err
@@ -751,7 +771,7 @@ func (coll *testMongoCollection) DeleteOne(ctx context.Context, filter interface
 func (coll *testMongoCollection) FindOneAndDelete(ctx context.Context, filter interface{}, opts ...*options.FindOneAndDeleteOptions) *mongo.SingleResult {
 	var rawResult []byte
 	coll.ctx = ctx
-	fmt.Println(filter, opts)
+	fmt.Println("\n--->FIND ONE AND DELETE: ", filter, opts)
 	filterDoc, err := coll.unmarshallBSON(filter)
 	if err == nil {
 		delDocs, err := coll.delete([]dbModel{filterDoc})
@@ -770,17 +790,22 @@ func (coll *testMongoCollection) FindOneAndDelete(ctx context.Context, filter in
 // UpdateOne a document in the test collection
 func (coll *testMongoCollection) UpdateOne(ctx context.Context, filter interface{}, update interface{}, opts ...*options.UpdateOptions) (*mongo.UpdateResult, error) {
 	coll.ctx = ctx
-	fmt.Println(filter, update, opts)
+	fmt.Println("\n--->UPDATE ONE: ", filter, update, opts)
 	filterDoc, err := coll.unmarshallBSON(filter)
-	if err == nil {
+	if err != nil {
 		return nil, err
 	}
 	docId, err := standardizeID(filterDoc)
-	if err == nil {
+	if err != nil {
+		return nil, err
+	}
+	update, err = cleanUpdateBSON(update)
+	if err != nil {
+		panic(err)
 		return nil, err
 	}
 	updateDoc, err := coll.unmarshallBSON(update)
-	if err == nil {
+	if err != nil {
 		return nil, err
 	}
 	reDoc, err := coll.updateById(docId, updateDoc)
@@ -789,18 +814,27 @@ func (coll *testMongoCollection) UpdateOne(ctx context.Context, filter interface
 
 // UpdateByID a document using an ID as the filter
 func (coll *testMongoCollection) UpdateByID(ctx context.Context, id interface{}, update interface{}, opts ...*options.UpdateOptions) (*mongo.UpdateResult, error) {
+	fmt.Println("\n--->UPDATE BY ID: ", id, update, opts)
 	if id == nil {
 		return nil, mongo.ErrNilValue
 	}
-	fmt.Println(id, update, opts)
-	return coll.UpdateOne(ctx, bson.D{{"_id", id}}, update, opts...)
+	update, err := cleanUpdateBSON(update)
+	if err != nil {
+		panic(err)
+		return nil, err
+	}
+	updateDoc, err := coll.unmarshallBSON(update)
+	if err != nil {
+		return nil, err
+	}
+	return coll.UpdateOne(ctx, bson.D{{"_id", id}}, updateDoc, opts...)
 }
 
 // Find returns a collection of documents
 func (coll *testMongoCollection) Find(ctx context.Context, filter interface{}, opts ...*options.FindOptions) (cur *mongo.Cursor, err error) {
 	var rawResults []byte
 	coll.ctx = ctx
-	fmt.Println(filter, opts)
+	fmt.Println("\n--->FIND: ", filter, opts)
 	filterDoc, err := coll.unmarshallBSON(filter)
 	if err != nil {
 		return nil, err
@@ -820,6 +854,7 @@ func (coll *testMongoCollection) Find(ctx context.Context, filter interface{}, o
 func (coll *testMongoCollection) FindOne(ctx context.Context, filter interface{}, opts ...*options.FindOneOptions) *mongo.SingleResult {
 	var rawResult []byte
 	coll.ctx = ctx
+	fmt.Println("\n--->FIND ONE: ", filter, opts)
 	filterDoc, err := coll.unmarshallBSON(filter)
 	if err == nil {
 		reDocs, err := coll.find(filterDoc)
@@ -845,7 +880,7 @@ func (coll *testMongoCollection) FindOne(ctx context.Context, filter interface{}
 func (coll *testMongoCollection) CountDocuments(ctx context.Context, filter interface{}, opts ...*options.CountOptions) (int64, error) {
 	var c int64
 	coll.ctx = ctx
-	fmt.Println(filter, opts)
+	fmt.Println("\n--->COUNT DOCUMENTS: ", filter, opts)
 	filterDoc, err := coll.unmarshallBSON(filter)
 	if err != nil {
 		return c, err

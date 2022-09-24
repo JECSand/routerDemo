@@ -67,6 +67,9 @@ func (u *userModel) update(doc interface{}) (err error) {
 	if len(um.Email) > 0 {
 		u.Email = um.Email
 	}
+	if len(um.Password) > 0 {
+		u.Password = um.Password
+	}
 	if len(um.GroupId.Hex()) > 0 && um.GroupId.Hex() != "000000000000000000000000" {
 		u.GroupId = um.GroupId
 	}

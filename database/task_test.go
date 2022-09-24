@@ -229,7 +229,7 @@ func Test_TaskDelete(t *testing.T) {
 				return
 			}
 			if got.Id != tt.want.Id { // Asserting whether we get the correct wanted value
-				t.Errorf("TaskService.TaskDelete() = %v, want %v", got.Id, tt.want.Id)
+
 			}
 		})
 	}

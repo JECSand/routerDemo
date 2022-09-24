@@ -90,6 +90,10 @@ func (gr *taskRouter) CreateTask(w http.ResponseWriter, r *http.Request) {
 func (gr *taskRouter) ModifyTask(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	taskId := vars["taskId"]
+	if taskId == "" || taskId == "000000000000000000000000" {
+		utilities.RespondWithError(w, http.StatusBadRequest, utilities.JWTError{Message: "missing taskId"})
+		return
+	}
 	var task models.Task
 	body, err := io.ReadAll(io.LimitReader(r.Body, 1048576))
 	if err != nil {
@@ -122,7 +126,7 @@ func (gr *taskRouter) ModifyTask(w http.ResponseWriter, r *http.Request) {
 func (gr *taskRouter) TaskShow(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	taskId := vars["taskId"]
-	if taskId == "" {
+	if taskId == "" || taskId == "000000000000000000000000" {
 		utilities.RespondWithError(w, http.StatusBadRequest, utilities.JWTError{Message: "missing taskId"})
 		return
 	}
@@ -143,7 +147,7 @@ func (gr *taskRouter) TaskShow(w http.ResponseWriter, r *http.Request) {
 func (gr *taskRouter) DeleteTask(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	taskId := vars["taskId"]
-	if taskId == "" {
+	if taskId == "" || taskId == "000000000000000000000000" {
 		utilities.RespondWithError(w, http.StatusBadRequest, utilities.JWTError{Message: "missing taskId"})
 		return
 	}

@@ -78,6 +78,10 @@ func (gr *groupRouter) CreateGroup(w http.ResponseWriter, r *http.Request) {
 func (gr *groupRouter) ModifyGroup(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	groupId := vars["groupId"]
+	if groupId == "" || groupId == "000000000000000000000000" {
+		utilities.RespondWithError(w, http.StatusBadRequest, utilities.JWTError{Message: "missing groupId"})
+		return
+	}
 	var group models.Group
 	body, err := io.ReadAll(io.LimitReader(r.Body, 1048576))
 	if err != nil {
@@ -110,7 +114,7 @@ func (gr *groupRouter) ModifyGroup(w http.ResponseWriter, r *http.Request) {
 func (gr *groupRouter) GroupShow(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	groupId := vars["groupId"]
-	if groupId == "" {
+	if groupId == "" || groupId == "000000000000000000000000" {
 		utilities.RespondWithError(w, http.StatusBadRequest, utilities.JWTError{Message: "missing groupId"})
 		return
 	}
@@ -131,7 +135,7 @@ func (gr *groupRouter) GroupShow(w http.ResponseWriter, r *http.Request) {
 func (gr *groupRouter) DeleteGroup(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	groupId := vars["groupId"]
-	if groupId == "" {
+	if groupId == "" || groupId == "000000000000000000000000" {
 		utilities.RespondWithError(w, http.StatusBadRequest, utilities.JWTError{Message: "missing groupId"})
 		return
 	}

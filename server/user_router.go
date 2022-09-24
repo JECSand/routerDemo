@@ -22,9 +22,9 @@ type userRouter struct {
 func NewUserRouter(router *mux.Router, a *services.TokenService, u services.UserService, g services.GroupService) *mux.Router {
 	uRouter := userRouter{a, u, g}
 	router.HandleFunc("/auth", utilities.HandleOptionsRequest).Methods("OPTIONS")
-	router.HandleFunc("/auth", uRouter.Signin).Methods("POST")
+	router.HandleFunc("/auth", uRouter.SignIn).Methods("POST")
 	router.HandleFunc("/auth", a.MemberTokenVerifyMiddleWare(uRouter.RefreshSession)).Methods("GET")
-	router.HandleFunc("/auth", a.MemberTokenVerifyMiddleWare(uRouter.Signout)).Methods("DELETE")
+	router.HandleFunc("/auth", a.MemberTokenVerifyMiddleWare(uRouter.SignOut)).Methods("DELETE")
 	router.HandleFunc("/auth/register", utilities.HandleOptionsRequest).Methods("OPTIONS")
 	router.HandleFunc("/auth/register", uRouter.RegisterUser).Methods("POST")
 	router.HandleFunc("/auth/api-key", utilities.HandleOptionsRequest).Methods("OPTIONS")
@@ -67,7 +67,8 @@ func (ur *userRouter) UpdatePassword(w http.ResponseWriter, r *http.Request) {
 		utilities.RespondWithError(w, http.StatusBadRequest, utilities.JWTError{Message: err.Error()})
 		return
 	}
-	u, err := ur.uService.UpdatePassword(decodedToken.ToUser(), pw.CurrentPassword, pw.NewPassword)
+	inUser := decodedToken.ToUser()
+	u, err := ur.uService.UpdatePassword(inUser, pw.CurrentPassword, pw.NewPassword)
 	if err != nil {
 		utilities.RespondWithError(w, http.StatusUnauthorized, utilities.JWTError{Message: err.Error()})
 		return
@@ -86,6 +87,10 @@ func (ur *userRouter) UpdatePassword(w http.ResponseWriter, r *http.Request) {
 func (ur *userRouter) ModifyUser(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	userId := vars["userId"]
+	if userId == "" || userId == "000000000000000000000000" {
+		utilities.RespondWithError(w, http.StatusBadRequest, utilities.JWTError{Message: "missing userId"})
+		return
+	}
 	var user models.User
 	user.Id = userId
 	body, err := io.ReadAll(io.LimitReader(r.Body, 1048576))
@@ -125,8 +130,8 @@ func (ur *userRouter) ModifyUser(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Signin is the handler function that manages the user signin process
-func (ur *userRouter) Signin(w http.ResponseWriter, r *http.Request) {
+// SignIn is the handler function that manages the user SignIn process
+func (ur *userRouter) SignIn(w http.ResponseWriter, r *http.Request) {
 	var user models.User
 	body, err := io.ReadAll(io.LimitReader(r.Body, 1048576))
 	if err != nil {
@@ -207,8 +212,8 @@ func (ur *userRouter) GenerateAPIKey(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
-// Signout is the handler function that ends a users session
-func (ur *userRouter) Signout(w http.ResponseWriter, r *http.Request) {
+// SignOut is the handler function that ends a users session
+func (ur *userRouter) SignOut(w http.ResponseWriter, r *http.Request) {
 	authToken := r.Header.Get("Auth-Token")
 	err := ur.aService.BlacklistAuthToken(authToken)
 	if err != nil {
@@ -340,12 +345,13 @@ func (ur *userRouter) UsersShow(w http.ResponseWriter, r *http.Request) {
 func (ur *userRouter) UserShow(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	userId := vars["userId"]
-	if userId == "" {
+	if userId == "" || userId == "000000000000000000000000" {
 		utilities.RespondWithError(w, http.StatusBadRequest, utilities.JWTError{Message: "missing userId"})
 		return
 	}
 	decodedToken, err := auth.DecodeJWT(r.Header.Get("Auth-Token"))
 	if err != nil {
+		utilities.RespondWithError(w, http.StatusUnauthorized, utilities.JWTError{Message: err.Error()})
 		return
 	}
 	groupId := decodedToken.AdminRouteRoleCheck()
@@ -367,7 +373,7 @@ func (ur *userRouter) UserShow(w http.ResponseWriter, r *http.Request) {
 func (ur *userRouter) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	userId := vars["userId"]
-	if userId == "" {
+	if userId == "" || userId == "000000000000000000000000" {
 		utilities.RespondWithError(w, http.StatusBadRequest, utilities.JWTError{Message: "missing userId"})
 		return
 	}
